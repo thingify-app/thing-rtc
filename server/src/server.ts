@@ -36,12 +36,24 @@ export class Server {
     }
   }
 
-  onMessage(message: Message) {
+  onMessage(connection: Connection, message: Message) {
 
   }
 
   onDisconnection(connection: Connection) {
+    const responderId = connection.responderId;
+    const connectionPair = this.getConnectionPair(connection.responderId);
+    switch (connection.role) {
+      case 'initiator':
+        connectionPair.initiatorConnection = null;
+        break;
+      case 'responder':
+        connectionPair.responderConnection = null;
+    }
 
+    if (connectionPair.initiatorConnection === null && connectionPair.responderConnection === null) {
+      this.connectionMap.delete(responderId);
+    }
   }
 }
 

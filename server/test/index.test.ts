@@ -26,4 +26,17 @@ describe('server', function() {
     server.onConnection(connection);
     expect(() => server.onConnection(connection)).to.throw();
   });
+
+  it('initiator connection succeeds if disconnected after connected', function() {
+    const server = new Server();
+    const sendMessageCallback = fake();
+    const connection: Connection = {
+      role: 'initiator',
+      responderId: 'abc',
+      sendMessage: sendMessageCallback
+    };
+    server.onConnection(connection);
+    server.onDisconnection(connection);
+    server.onConnection(connection);
+  });
 });
