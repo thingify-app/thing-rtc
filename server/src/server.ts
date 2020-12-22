@@ -37,7 +37,20 @@ export class Server {
   }
 
   onMessage(connection: Connection, message: Message) {
-
+    const responderId = connection.responderId;
+    const connectionPair = this.getConnectionPair(responderId);
+    switch (connection.role) {
+      case 'initiator':
+        if (connectionPair.responderConnection) {
+          connectionPair.responderConnection.sendMessage(message.content);
+        }
+        break;
+      case 'responder':
+        if (connectionPair.initiatorConnection) {
+          connectionPair.initiatorConnection.sendMessage(message.content);
+        }
+        break;
+    }
   }
 
   onDisconnection(connection: Connection) {
@@ -71,6 +84,5 @@ export interface Connection {
 }
 
 export interface Message {
-  senderId: string;
   content: string;
 }

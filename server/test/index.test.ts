@@ -39,4 +39,27 @@ describe('server', function() {
     server.onDisconnection(connection);
     server.onConnection(connection);
   });
+
+  it('message from initiator is relayed to responder', function() {
+    const server = new Server();
+    const initiatorSendMessage = fake();
+    const responderSendMessage = fake();
+    const initiator: Connection = {
+      role: 'initiator',
+      responderId: 'abc',
+      sendMessage: initiatorSendMessage
+    };
+    server.onConnection(initiator);
+
+    const responder: Connection = {
+      role: 'responder',
+      responderId: 'abc',
+      sendMessage: responderSendMessage
+    };
+    server.onConnection(responder);
+
+    server.onMessage(initiator, { content: 'hello' });
+    expect(initiatorSendMessage.notCalled).to.be.true;
+    expect(responderSendMessage.calledWith('hello')).to.be.true;
+  });
 });
