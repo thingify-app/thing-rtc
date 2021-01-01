@@ -1,7 +1,7 @@
 {
   "name": "thingrtc-server",
   "scripts": {
-    "serve": "ts-node-dev index.ts",
+    "serve": "ts-node-dev src/index.ts",
     "test": "mocha -r ts-node/register test/**/*.test.ts"
   },
   "private": true,

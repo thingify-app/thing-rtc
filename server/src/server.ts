@@ -1,29 +1,21 @@
 export class Server {
-  private connectionMap = new Map<string, ConnectionPair>();
+  private connectionAuthMap = new Map<Connection, AuthedData>();
+  private responderConnectionMap = new Map<string, ConnectionPair>();
 
   onConnection(connection: Connection) {
-    const responderId = connection.responderId;
-    const connectionPair = this.getConnectionPair(responderId);
-    switch (connection.role) {
-      case 'initiator':
-        if (connectionPair.initiatorConnection) {
-          throw new Error('Existing initiator already connected.');
-        } else {
-          connectionPair.initiatorConnection = connection;
-        }
-        break;
-      case 'responder':
-        if (connectionPair.responderConnection) {
-          throw new Error('Existing responder already connected.');
-        } else {
-          connectionPair.responderConnection = connection;
-        }
-        break;
+    if (this.connectionAuthMap.has(connection)) {
+      throw new Error('Connection reference already exists.');
+    } else {
+      this.connectionAuthMap.set(connection, {
+        authed: false,
+        role: null,
+        responderId: null
+      });
     }
   }
 
   private getConnectionPair(responderId: string) {
-    const entry = this.connectionMap.get(responderId);
+    const entry = this.responderConnectionMap.get(responderId);
     if (entry) {
       return entry;
     } else {
@@ -31,41 +23,76 @@ export class Server {
         initiatorConnection: null,
         responderConnection: null
       };
-      this.connectionMap.set(responderId, connectionPair);
+      this.responderConnectionMap.set(responderId, connectionPair);
       return connectionPair;
     }
   }
 
-  onMessage(connection: Connection, message: Message) {
-    const responderId = connection.responderId;
-    const connectionPair = this.getConnectionPair(responderId);
-    switch (connection.role) {
-      case 'initiator':
-        if (connectionPair.responderConnection) {
-          connectionPair.responderConnection.sendMessage(message.content);
+  onMessage(connection: Connection, message: string) {
+    const authState = this.connectionAuthMap.get(connection);
+    if (authState === null) {
+      connection.disconnect();
+      throw new Error('Received message from unknown connection.');
+    } else if (authState.authed === false) {
+      const authMessage = this.validateAuthMessage(message);
+      const responderId = authMessage.responderId;
+      const role = authMessage.role;
+      // TODO add actual auth logic
+      this.connectionAuthMap.set(connection, {
+        authed: true,
+        responderId,
+        role
+      });
+      const connectionPair = this.getConnectionPair(responderId);
+      if ((role === 'initiator' && connectionPair.initiatorConnection) || (role === 'responder' && connectionPair.responderConnection)) {
+        connection.disconnect();
+        throw new Error('Role already connected.');
+      } else {
+        if (role === 'initiator') {
+          connectionPair.initiatorConnection = connection;
+        } else if (role === 'responder') {
+          connectionPair.responderConnection = connection;
         }
-        break;
-      case 'responder':
-        if (connectionPair.initiatorConnection) {
-          connectionPair.initiatorConnection.sendMessage(message.content);
-        }
-        break;
+      }
+    } else if (authState.authed === true) {
+      // TODO handle normal message
+    } else {
+      connection.disconnect();
+      throw new Error('Expected auth message.');
+    }
+  }
+
+  private validateAuthMessage(message: string): AuthMessage {
+    const json = JSON.parse(message);
+    if (json && json.type === 'auth' && json.responderId && (json.role === 'initiator' || json.role === 'responder')) {
+      return {
+        type: 'auth',
+        role: json.role,
+        responderId: json.responderId
+      };
+    } else {
+      throw new Error('Invalid auth message.');
     }
   }
 
   onDisconnection(connection: Connection) {
-    const responderId = connection.responderId;
-    const connectionPair = this.getConnectionPair(connection.responderId);
-    switch (connection.role) {
-      case 'initiator':
-        connectionPair.initiatorConnection = null;
-        break;
-      case 'responder':
-        connectionPair.responderConnection = null;
-    }
+    const authState = this.connectionAuthMap.get(connection);
+    this.connectionAuthMap.delete(connection);
+    if (authState) {
+      if (authState.responderId) {
+        const connectionPair = this.getConnectionPair(authState.responderId);
+        switch (authState.role) {
+          case 'initiator':
+            connectionPair.initiatorConnection = null;
+            break;
+          case 'responder':
+            connectionPair.responderConnection = null;
+        }
 
-    if (connectionPair.initiatorConnection === null && connectionPair.responderConnection === null) {
-      this.connectionMap.delete(responderId);
+        if (connectionPair.initiatorConnection === null && connectionPair.responderConnection === null) {
+          this.responderConnectionMap.delete(authState.responderId);
+        }
+      }
     }
   }
 }
@@ -77,12 +104,19 @@ interface ConnectionPair {
   responderConnection: Connection;
 };
 
-export interface Connection {
+interface AuthedData {
+  authed: boolean;
   role: Role;
   responderId: string;
-  sendMessage(message: string);
 }
 
-export interface Message {
-  content: string;
+interface AuthMessage {
+  type: 'auth';
+  role: Role;
+  responderId: string;
+}
+
+export interface Connection {
+  sendMessage(message: string): void;
+  disconnect(): void;
 }
