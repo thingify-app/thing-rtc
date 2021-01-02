@@ -55,7 +55,8 @@ export class Server {
         }
       }
     } else if (authState.authed === true) {
-      // TODO handle normal message
+      const relayMessage = this.validateRelayMessage(message);
+      this.relayMessage(connection, relayMessage.message);
     } else {
       connection.disconnect();
       throw new Error('Expected auth message.');
@@ -73,6 +74,33 @@ export class Server {
     } else {
       throw new Error('Invalid auth message.');
     }
+  }
+
+  private validateRelayMessage(message: string): RelayMessage {
+    const json = JSON.parse(message);
+    if (json && json.type === 'relay' && json.message) {
+      return {
+        type: 'relay',
+        message: json.message
+      };
+    } else {
+      throw new Error('Invalid relay message');
+    }
+  }
+
+  private relayMessage(connection: Connection, message: string) {
+    const authState = this.connectionAuthMap.get(connection);
+    const responderId = authState.responderId;
+    const role = authState.role;
+
+    const connectionPair = this.getConnectionPair(responderId);
+    let peer: Connection;
+    if (role === 'initiator') {
+      peer = connectionPair.responderConnection;
+    } else {
+      peer = connectionPair.initiatorConnection;
+    }
+    peer.sendMessage(message);
   }
 
   onDisconnection(connection: Connection) {
@@ -114,6 +142,11 @@ interface AuthMessage {
   type: 'auth';
   role: Role;
   responderId: string;
+}
+
+interface RelayMessage {
+  type: 'relay';
+  message: string;
 }
 
 export interface Connection {

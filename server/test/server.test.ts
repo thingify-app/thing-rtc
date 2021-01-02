@@ -81,4 +81,38 @@ describe('server', function() {
     server.onConnection(newConnection);
     server.onMessage(newConnection, '{"type": "auth", "role": "responder", "responderId": "abc"}');
   });
+  
+  it('relays message from initiator to responder', function() {
+    server.onConnection(connection);
+    server.onMessage(connection, '{"type": "auth", "role": "initiator", "responderId": "abc"}');
+    const responderSendMessageCallback = fake();
+    const responderDisconnectCallback = fake();
+    const responderConnection: Connection = {
+      sendMessage: responderSendMessageCallback,
+      disconnect: responderDisconnectCallback
+    };
+    server.onConnection(responderConnection);
+    server.onMessage(responderConnection, '{"type": "auth", "role": "responder", "responderId": "abc"}');
+
+    server.onMessage(connection, '{"type": "relay", "message": "hello world"}');
+
+    expect(responderSendMessageCallback.calledOnceWith('hello world')).to.be.true;
+  });
+
+  it('relays message from responder to initiator', function() {
+    server.onConnection(connection);
+    server.onMessage(connection, '{"type": "auth", "role": "responder", "responderId": "abc"}');
+    const initiatorSendMessageCallback = fake();
+    const initiatorDisconnectCallback = fake();
+    const initiatorConnection: Connection = {
+      sendMessage: initiatorSendMessageCallback,
+      disconnect: initiatorDisconnectCallback
+    };
+    server.onConnection(initiatorConnection);
+    server.onMessage(initiatorConnection, '{"type": "auth", "role": "initiator", "responderId": "abc"}');
+
+    server.onMessage(connection, '{"type": "relay", "message": "hello world"}');
+
+    expect(initiatorSendMessageCallback.calledOnceWith('hello world')).to.be.true;
+  });
 });
