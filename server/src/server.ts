@@ -28,63 +28,42 @@ export class Server {
     }
   }
 
-  onMessage(connection: Connection, message: string) {
+  onAuthMessage(connection: Connection, message: AuthMessage) {
+    const responderId = message.responderId;
+    const role = message.role;
+
+    this.connectionAuthMap.set(connection, {
+      authed: true,
+      responderId,
+      role
+    });
+
+    const connectionPair = this.getConnectionPair(responderId);
+    if ((role === 'initiator' && connectionPair.initiatorConnection) || (role === 'responder' && connectionPair.responderConnection)) {
+      connection.disconnect();
+      throw new Error('Role already connected.');
+    } else {
+      if (role === 'initiator') {
+        connectionPair.initiatorConnection = connection;
+      } else if (role === 'responder') {
+        connectionPair.responderConnection = connection;
+      }
+    }
+  }
+
+  onContentMessage(connection: Connection, message: string) {
     const authState = this.connectionAuthMap.get(connection);
     if (authState === null) {
       connection.disconnect();
       throw new Error('Received message from unknown connection.');
     } else if (authState.authed === false) {
-      const authMessage = this.validateAuthMessage(message);
-      const responderId = authMessage.responderId;
-      const role = authMessage.role;
-      // TODO add actual auth logic
-      this.connectionAuthMap.set(connection, {
-        authed: true,
-        responderId,
-        role
-      });
-      const connectionPair = this.getConnectionPair(responderId);
-      if ((role === 'initiator' && connectionPair.initiatorConnection) || (role === 'responder' && connectionPair.responderConnection)) {
-        connection.disconnect();
-        throw new Error('Role already connected.');
-      } else {
-        if (role === 'initiator') {
-          connectionPair.initiatorConnection = connection;
-        } else if (role === 'responder') {
-          connectionPair.responderConnection = connection;
-        }
-      }
+      connection.disconnect();
+      throw new Error('Received content message without being authed.');
     } else if (authState.authed === true) {
-      const relayMessage = this.validateRelayMessage(message);
-      this.relayMessage(connection, relayMessage.message);
+      this.relayMessage(connection, message);
     } else {
       connection.disconnect();
-      throw new Error('Expected auth message.');
-    }
-  }
-
-  private validateAuthMessage(message: string): AuthMessage {
-    const json = JSON.parse(message);
-    if (json && json.type === 'auth' && json.responderId && (json.role === 'initiator' || json.role === 'responder')) {
-      return {
-        type: 'auth',
-        role: json.role,
-        responderId: json.responderId
-      };
-    } else {
-      throw new Error('Invalid auth message.');
-    }
-  }
-
-  private validateRelayMessage(message: string): RelayMessage {
-    const json = JSON.parse(message);
-    if (json && json.type === 'relay' && json.message) {
-      return {
-        type: 'relay',
-        message: json.message
-      };
-    } else {
-      throw new Error('Invalid relay message');
+      throw new Error('Unknown auth state.');
     }
   }
 
@@ -138,15 +117,10 @@ interface AuthedData {
   responderId: string;
 }
 
-interface AuthMessage {
-  type: 'auth';
-  role: Role;
+export interface AuthMessage {
   responderId: string;
-}
-
-interface RelayMessage {
-  type: 'relay';
-  message: string;
+  role: Role;
+  expiry: number;
 }
 
 export interface Connection {
