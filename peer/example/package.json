@@ -1,0 +1,15 @@
+{
+    "name": "thingrtc-peer-example",
+    "scripts": {
+        "build": "parcel build index.html",
+        "serve": "parcel index.html"
+    },
+    "private": true,
+    "devDependencies": {
+        "parcel-bundler": "^1.12.4",
+        "typescript": "^4.0.5"
+    },
+    "dependencies": {
+        "thingrtc-peer": "file:../"
+    }
+}
