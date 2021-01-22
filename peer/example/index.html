@@ -2,9 +2,19 @@
 <html>
     <head>
         <title>ThingRTC</title>
-        <script src="./app.ts"></script>
     </head>
     <body>
-        ThingRTC
+        <p>Role:</p>
+        <input type="radio" id="initiator" name="role" checked/>
+        <label for="initiator">Initiator</label>
+        <input type="radio" id="responder" name="role"/>
+        <label for="responder">Responder</label>
+        <p>Responder ID:</p>
+        <p><input type="text" id="responderId"/></p>
+        <p><button id="connectButton">Connect</button></p>
+        <p><button id="disconnectButton">Disconnect</button></p>
+        <p><video id="remoteVideo" autoplay playsinline></video></p>
+
+        <script src="./app.ts"></script>
     </body>
 </html>
