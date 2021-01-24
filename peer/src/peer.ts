@@ -5,24 +5,26 @@ export class SignallingServer {
 
     constructor(private options: SignallingOptions) {}
 
-    async connectAsInitiator(token: string): Promise<SignallingConnection> {
-        throw new Error('Not implemented.');
-    }
-
-    async connectAsResponder(token: string): Promise<SignallingConnection> {
+    async connect(token: string): Promise<SignallingConnection> {
         throw new Error('Not implemented.');
     }
 }
 
 export interface SignallingConnection {
     on(type: 'peerConnect', callback: () => void): void;
-    on(type: 'message', callback: (message: string) => void): void;
+    on(type: 'iceCandidate', callback: (candidate: RTCIceCandidate) => void): void;
+    on(type: 'offer', callback: (offer: RTCSessionDescriptionInit) => void): void;
+    on(type: 'answer', callback: (answer: RTCSessionDescriptionInit) => void): void;
     on(type: 'peerDisconnect', callback: () => void): void;
     on(type: 'error', callback: () => void): void;
-    sendMessage(message: string): void;
+    sendIceCandidate(candidate: RTCIceCandidate): void;
+    sendOffer(offer: RTCSessionDescriptionInit): void;
+    sendAnswer(answer: RTCSessionDescriptionInit): void;
     disconnect(): void;
 }
 
 export interface SignallingOptions {
     serverHost: string;
 }
+
+export type Role = 'initiator' | 'responder';
