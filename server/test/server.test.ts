@@ -1,12 +1,12 @@
 import { Connection, Server } from "../src/server";
 import { expect } from 'chai';
-import { fake } from 'sinon';
+import { assert, fake, SinonSpy } from 'sinon';
 import 'mocha';
 
 describe('server', function() {
   let server: Server;
-  let sendMessageCallback: (message: string) => void;
-  let disconnectCallback: () => void;
+  let sendMessageCallback: SinonSpy;
+  let disconnectCallback: SinonSpy;
   let connection: Connection;
 
   beforeEach(() => {
@@ -72,6 +72,22 @@ describe('server', function() {
     server.onAuthMessage(newConnection, {role: 'responder', responderId: 'abc', expiry: 0});
   });
   
+  it('sends peerConnect message to opposite peer', function () {
+    server.onConnection(connection);
+    server.onAuthMessage(connection, {role: 'initiator', responderId: 'abc', expiry: 0});
+    const responderSendMessageCallback = fake();
+    const responderDisconnectCallback = fake();
+    const responderConnection: Connection = {
+      sendMessage: responderSendMessageCallback,
+      disconnect: responderDisconnectCallback
+    };
+    server.onConnection(responderConnection);
+    server.onAuthMessage(responderConnection, {role: 'responder', responderId: 'abc', expiry: 0});
+
+    assert.calledOnceWithExactly(sendMessageCallback, '{"type":"peerConnect"}');
+    assert.calledOnceWithExactly(responderSendMessageCallback, '{"type":"peerConnect"}');
+  });
+
   it('relays message from initiator to responder', function() {
     server.onConnection(connection);
     server.onAuthMessage(connection, {role: 'initiator', responderId: 'abc', expiry: 0});
@@ -86,7 +102,7 @@ describe('server', function() {
 
     server.onContentMessage(connection, 'hello world');
 
-    expect(responderSendMessageCallback.calledOnceWith('hello world')).to.be.true;
+    assert.calledWithExactly(responderSendMessageCallback, 'hello world');
   });
 
   it('relays message from responder to initiator', function() {
@@ -103,6 +119,6 @@ describe('server', function() {
 
     server.onContentMessage(connection, 'hello world');
 
-    expect(initiatorSendMessageCallback.calledOnceWith('hello world')).to.be.true;
+    assert.calledWithExactly(initiatorSendMessageCallback, 'hello world');
   });
 });

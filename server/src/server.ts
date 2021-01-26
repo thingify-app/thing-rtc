@@ -48,7 +48,21 @@ export class Server {
       } else if (role === 'responder') {
         connectionPair.responderConnection = connection;
       }
+
+      // If we now have both peers, send a peerConnection message to each.
+      // The most recently connected peer will get this message immediately, as their partner was already present.
+      if (connectionPair.initiatorConnection && connectionPair.responderConnection) {
+        this.sendPeerConnectMessage(connectionPair);
+      }
     }
+  }
+
+  private sendPeerConnectMessage(connectionPair: ConnectionPair) {
+    const message = JSON.stringify({
+      type: 'peerConnect'
+    });
+    connectionPair.initiatorConnection.sendMessage(message);
+    connectionPair.responderConnection.sendMessage(message);
   }
 
   onContentMessage(connection: Connection, message: string) {
