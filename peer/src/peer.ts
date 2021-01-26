@@ -1,6 +1,8 @@
 // Websocket layer which talks to server
 // abstract websocket
 
+import { TokenGenerator } from "./token-generator";
+
 export class SignallingServer {
     private socket?: WebSocket;
 
@@ -13,9 +15,10 @@ export class SignallingServer {
 
     constructor(private options: SignallingOptions) {}
 
-    connect(token: string) {
+    connect(tokenGenerator: TokenGenerator) {
         this.socket = new WebSocket(this.options.serverUrl);
         this.socket.addEventListener('open', () => {
+            const token = tokenGenerator.generateToken();
             this.sendAuthMessage(token);
         });
         this.socket.addEventListener('message', event => {
@@ -130,5 +133,3 @@ export class SignallingServer {
 export interface SignallingOptions {
     serverUrl: string;
 }
-
-export type Role = 'initiator' | 'responder';

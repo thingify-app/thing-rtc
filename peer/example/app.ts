@@ -1,4 +1,4 @@
-import { generateToken, SignallingServer } from 'thingrtc-peer';
+import { BasicTokenGenerator, SignallingServer } from 'thingrtc-peer';
 
 const server = new SignallingServer({serverUrl: 'ws://localhost:8080/'});
 let peerTasks: PeerTasks;
@@ -17,8 +17,7 @@ connectButton.addEventListener('click', () => {
     connectButton.disabled = true;
     disconnectButton.disabled = false;
     const role = initiatorRadio.checked ? 'initiator' : 'responder';
-    const token = generateToken(role, responderIdText.value);
-    connect(role, token);
+    connect(role, responderIdText.value);
 });
 
 disconnectButton.addEventListener('click', () => {
@@ -31,8 +30,9 @@ sendMessageButton.addEventListener('click', () => {
     peerTasks?.sendMessage(messageText.value);
 });
 
-function connect(role: 'initiator' | 'responder', token: string) {
-    server.connect(token);
+function connect(role: 'initiator' | 'responder', responderId: string) {
+    const tokenGenerator = new BasicTokenGenerator(role, responderId);
+    server.connect(tokenGenerator);
     peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server) : new ResponderPeerTasks(server);
 
     server.on('peerConnect', () => {
