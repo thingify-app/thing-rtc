@@ -9,6 +9,11 @@ const authValidator = new ParseThroughAuthValidator();
 const port = 8080;
 const wss = new WebSocket.Server({ port });
 console.log(`Listening on port ${port}...`);
+
+wss.on('error', error => {
+    console.error(error);
+});
+
 wss.on('connection', ws => {
     console.log('Received new connection.');
 
@@ -25,7 +30,11 @@ wss.on('connection', ws => {
             handleAuthMessage: message => server.onAuthMessage(connection, message),
             handleContentMessage: message => server.onContentMessage(connection, message.content)
         });
-        messageParser.parseMessage(data.toString());
+        try {
+            messageParser.parseMessage(data.toString());
+        } catch (error: any) {
+            console.error(error);
+        }
     });
 
     ws.on('close', () => {

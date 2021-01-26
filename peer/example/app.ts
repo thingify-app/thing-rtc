@@ -1,5 +1,7 @@
 import { generateToken, SignallingServer } from 'thingrtc-peer';
 
+const server = new SignallingServer({serverUrl: 'ws://localhost:8080/'});
+
 const initiatorRadio = document.getElementById('initiator') as HTMLInputElement;
 const responderIdText = document.getElementById('responderId') as HTMLInputElement;
 const connectButton = document.getElementById('connectButton') as HTMLButtonElement;
@@ -23,7 +25,6 @@ disconnectButton.addEventListener('click', () => {
 });
 
 function connect(role: 'initiator' | 'responder', token: string) {
-    const server = new SignallingServer({serverUrl: 'ws://localhost:8080/'});
     server.connect(token);
     const peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server) : new ResponderPeerTasks(server);
 
@@ -56,7 +57,7 @@ function connect(role: 'initiator' | 'responder', token: string) {
 }
 
 function disconnect() {
-
+    server.disconnect();
 }
 
 interface PeerTasks {
