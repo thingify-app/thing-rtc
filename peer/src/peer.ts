@@ -4,33 +4,6 @@
 export class SignallingServer {
     private socket?: WebSocket;
 
-    constructor(private options: SignallingOptions) {}
-
-    async connect(token: string): Promise<SignallingConnection> {
-        return new Promise((resolve, reject) => {
-            this.socket = new WebSocket(this.options.serverUrl);
-            this.socket.addEventListener('open', () => {
-                console.log('Connection opened');
-                resolve(new InternalSignallingConnection(this.socket!, token));
-            });
-        });
-    }
-}
-
-export interface SignallingConnection {
-    on(type: 'peerConnect', callback: () => void): void;
-    on(type: 'iceCandidate', callback: (candidate: RTCIceCandidate) => void): void;
-    on(type: 'offer', callback: (offer: RTCSessionDescriptionInit) => void): void;
-    on(type: 'answer', callback: (answer: RTCSessionDescriptionInit) => void): void;
-    on(type: 'peerDisconnect', callback: () => void): void;
-    on(type: 'error', callback: () => void): void;
-    sendIceCandidate(candidate: RTCIceCandidate): void;
-    sendOffer(offer: RTCSessionDescriptionInit): void;
-    sendAnswer(answer: RTCSessionDescriptionInit): void;
-    disconnect(): void;
-}
-
-class InternalSignallingConnection implements SignallingConnection {
     private peerConnectListener?: () => void;
     private iceCandidateListener?: (candidate: RTCIceCandidate) => void;
     private offerListener?: (offer: RTCSessionDescriptionInit) => void;
@@ -38,25 +11,28 @@ class InternalSignallingConnection implements SignallingConnection {
     private peerDisconnectListener?: () => void;
     private errorListener?: () => void;
 
-    constructor(private socket: WebSocket, private token: string) {
-        socket.addEventListener('open', () => {
-            this.sendAuthMessage();
+    constructor(private options: SignallingOptions) {}
+
+    connect(token: string) {
+        this.socket = new WebSocket(this.options.serverUrl);
+        this.socket.addEventListener('open', () => {
+            this.sendAuthMessage(token);
         });
-        socket.addEventListener('message', event => {
+        this.socket.addEventListener('message', event => {
             this.handleMessage(event.data);
         });
-        socket.addEventListener('error', () => {
+        this.socket.addEventListener('error', () => {
             this.errorListener?.();
         });
-        socket.addEventListener('close', () => {
+        this.socket.addEventListener('close', () => {
             this.errorListener?.();
         });
     }
 
-    private sendAuthMessage() {
+    private sendAuthMessage(token: string) {
         this.sendMessage({
             type: 'auth',
-            token: this.token
+            token: token
         });
     }
 
@@ -89,6 +65,12 @@ class InternalSignallingConnection implements SignallingConnection {
         }
     }
 
+    on(type: 'peerConnect', callback: () => void): void;
+    on(type: 'iceCandidate', callback: (candidate: RTCIceCandidate) => void): void;
+    on(type: 'offer', callback: (offer: RTCSessionDescriptionInit) => void): void;
+    on(type: 'answer', callback: (answer: RTCSessionDescriptionInit) => void): void;
+    on(type: 'peerDisconnect', callback: () => void): void;
+    on(type: 'error', callback: () => void): void;
     on(type: string, callback: any) {
         switch (type) {
             case 'peerConnect':
@@ -136,11 +118,12 @@ class InternalSignallingConnection implements SignallingConnection {
     }
 
     private sendMessage(data: any) {
-        this.socket.send(JSON.stringify(data));
+        this.socket?.send(JSON.stringify(data));
     }
 
     disconnect(): void {
-        this.socket.close();
+        this.socket?.close();
+        this.socket = undefined;
     }
 }
 

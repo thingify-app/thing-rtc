@@ -1,4 +1,4 @@
-import { SignallingConnection, SignallingServer } from 'thingrtc-peer';
+import { SignallingServer } from 'thingrtc-peer';
 
 const initiatorRadio = document.getElementById('initiator') as HTMLInputElement;
 const responderIdText = document.getElementById('responderId') as HTMLInputElement;
@@ -21,34 +21,34 @@ disconnectButton.addEventListener('click', () => {
     disconnect();
 });
 
-async function connect(role: 'initiator' | 'responder', token: string) {
+function connect(role: 'initiator' | 'responder', token: string) {
     const server = new SignallingServer({serverUrl: 'ws://localhost:8080/'});
-    const connection = await server.connect(token);
-    const peerTasks = role === 'initiator' ? new InitiatorPeerTasks(connection) : new ResponderPeerTasks(connection);
+    server.connect(token);
+    const peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server) : new ResponderPeerTasks(server);
 
-    connection.on('peerConnect', () => {
+    server.on('peerConnect', () => {
         peerTasks.onPeerConnect();
     });
 
-    connection.on('iceCandidate', iceCandidate => {
+    server.on('iceCandidate', iceCandidate => {
         peerTasks.onIceCandidate(iceCandidate);
     });
 
-    connection.on('offer', offer => {
+    server.on('offer', offer => {
         peerTasks.onOffer(offer);
     });
 
-    connection.on('answer', answer => {
+    server.on('answer', answer => {
         peerTasks.onAnswer(answer);
     });
 
-    connection.on('peerDisconnect', () => {
+    server.on('peerDisconnect', () => {
         // If we have not reached "connected" state with peer, tear down PeerConnection and all associated listeners etc.
         // Otherwise, ignore event.
         peerTasks.onPeerDisconnect();
     });
 
-    connection.on('error', () => {
+    server.on('error', () => {
         // This indicates a disconnect from the server (not initiated by us).
         // We should try from the start again if we haven't got a peer connection yet.
     });
@@ -69,14 +69,14 @@ interface PeerTasks {
 class BasePeerTasks implements PeerTasks {
     protected peerConnection: RTCPeerConnection;
 
-    constructor(protected signallingConnection: SignallingConnection) {}
+    constructor(protected server: SignallingServer) {}
 
     onPeerConnect(): void {
         this.peerConnection = this.createPeerConnection();
         // Once we have reached peer connected state, we should disconnect from server.
         this.peerConnection.addEventListener('connectionstatechange', event => {
             if (this.peerConnection.connectionState === 'connected') {
-                this.signallingConnection.disconnect();
+                this.server.disconnect();
             }
         });
     }
@@ -129,7 +129,7 @@ class BasePeerTasks implements PeerTasks {
         peerConnection.addEventListener('icecandidate', event => {
             if (event.candidate) {
                 console.log(`Got candidate: ${event.candidate}`);
-                this.signallingConnection.sendIceCandidate(event.candidate);
+                this.server.sendIceCandidate(event.candidate);
             }
         });
 
@@ -142,7 +142,7 @@ class InitiatorPeerTasks extends BasePeerTasks {
         super.onPeerConnect();
         this.peerConnection.createOffer().then(offer => {
             this.peerConnection.setLocalDescription(offer);
-            this.signallingConnection.sendOffer(offer);
+            this.server.sendOffer(offer);
         });
     }
 
