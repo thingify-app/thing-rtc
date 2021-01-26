@@ -65,6 +65,7 @@ function connect(role: 'initiator' | 'responder', responderId: string) {
 
 function disconnect() {
     server.disconnect();
+    peerTasks.disconnect();
 }
 
 interface PeerTasks {
@@ -75,6 +76,7 @@ interface PeerTasks {
     onPeerDisconnect(): void;
 
     sendMessage(message: string): void;
+    disconnect(): void;
 }
 
 abstract class BasePeerTasks implements PeerTasks {
@@ -110,6 +112,13 @@ abstract class BasePeerTasks implements PeerTasks {
 
     sendMessage(message: string): void {
         this.dataChannel?.send(message);
+    }
+
+    disconnect(): void {
+        this.dataChannel?.close();
+        this.peerConnection?.close();
+        this.dataChannel = null;
+        this.peerConnection = null;
     }
 
     private createPeerConnection(): RTCPeerConnection {
