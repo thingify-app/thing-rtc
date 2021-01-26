@@ -28,7 +28,7 @@ wss.on('connection', ws => {
         console.log(`Message received: ${data}`);
         const messageParser = new MessageParser(authValidator, {
             handleAuthMessage: message => server.onAuthMessage(connection, message),
-            handleContentMessage: message => server.onContentMessage(connection, message.content)
+            handleContentMessage: message => server.onContentMessage(connection, message)
         });
         try {
             messageParser.parseMessage(data.toString());

@@ -14,8 +14,10 @@ export class MessageParser {
             case 'auth':
                 this.messageHandler.handleAuthMessage(this.parseAuthMessage(json));
                 break;
-            case 'content':
-                this.messageHandler.handleContentMessage(this.parseContentMessage(json));
+            case 'offer':
+            case 'answer':
+            case 'iceCandidate':
+                this.messageHandler.handleContentMessage(message);
                 break;
             default:
                 throw new Error('Unknown type.');
@@ -29,21 +31,11 @@ export class MessageParser {
             throw new Error('Invalid auth message.');
         }
     }
-
-    private parseContentMessage(json: any): ContentMessage {
-        if (json.content && typeof(json.content) === 'string') {
-            return {
-                content: json.content
-            };
-        } else {
-            throw new Error('Invalid content message.');
-        }
-    }
 }
 
 export interface MessageHandler {
     handleAuthMessage(authMessage: AuthMessage): void;
-    handleContentMessage(contentMessage: ContentMessage): void;
+    handleContentMessage(contentMessage: string): void;
 }
 
 export type Role = 'initiator' | 'responder';

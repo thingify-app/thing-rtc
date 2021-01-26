@@ -29,8 +29,8 @@ describe('MessageParser', function() {
   });
 
   it('calls the correct handler for a content message', function() {
-    messageParser.parseMessage('{"type": "content", "content": "hello"}');
-    assert.calledWithExactly(handleContentMessage, { content: 'hello' });
+    messageParser.parseMessage('{"type": "offer", "offer": "hello"}');
+    assert.calledWithExactly(handleContentMessage, '{"type": "offer", "offer": "hello"}');
   });
 
   it('calls the correct handler for an auth message', function() {
@@ -48,9 +48,5 @@ describe('MessageParser', function() {
 
   it('throws error on invalid auth message', function() {
     expect(() => messageParser.parseMessage('{"type": "auth", "foo": "bar"}')).to.throw('Invalid auth message.');
-  });
-
-  it('throws error on invalid content message', function() {
-    expect(() => messageParser.parseMessage('{"type": "content", "foo": "bar"}')).to.throw('Invalid content message.');
   });
 });
