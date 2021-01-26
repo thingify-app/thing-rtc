@@ -1,4 +1,4 @@
-import { SignallingServer } from 'thingrtc-peer';
+import { generateToken, SignallingServer } from 'thingrtc-peer';
 
 const initiatorRadio = document.getElementById('initiator') as HTMLInputElement;
 const responderIdText = document.getElementById('responderId') as HTMLInputElement;
@@ -12,7 +12,8 @@ connectButton.addEventListener('click', () => {
     connectButton.disabled = true;
     disconnectButton.disabled = false;
     const role = initiatorRadio.checked ? 'initiator' : 'responder';
-    connect(role, responderIdText.value);
+    const token = generateToken(role, responderIdText.value);
+    connect(role, token);
 });
 
 disconnectButton.addEventListener('click', () => {
