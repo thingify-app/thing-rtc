@@ -1,11 +1,14 @@
 import { generateToken, SignallingServer } from 'thingrtc-peer';
 
 const server = new SignallingServer({serverUrl: 'ws://localhost:8080/'});
+let peerTasks: PeerTasks;
 
 const initiatorRadio = document.getElementById('initiator') as HTMLInputElement;
 const responderIdText = document.getElementById('responderId') as HTMLInputElement;
 const connectButton = document.getElementById('connectButton') as HTMLButtonElement;
 const disconnectButton = document.getElementById('disconnectButton') as HTMLButtonElement;
+const messageText = document.getElementById('message') as HTMLInputElement;
+const sendMessageButton = document.getElementById('sendMessageButton') as HTMLButtonElement;
 const remoteVideo = document.getElementById('remoteVideo') as HTMLVideoElement;
 
 disconnectButton.disabled = true;
@@ -24,9 +27,13 @@ disconnectButton.addEventListener('click', () => {
     disconnect();
 });
 
+sendMessageButton.addEventListener('click', () => {
+    peerTasks?.sendMessage(messageText.value);
+});
+
 function connect(role: 'initiator' | 'responder', token: string) {
     server.connect(token);
-    const peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server) : new ResponderPeerTasks(server);
+    peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server) : new ResponderPeerTasks(server);
 
     server.on('peerConnect', () => {
         peerTasks.onPeerConnect();
@@ -66,10 +73,13 @@ interface PeerTasks {
     onOffer(offer: RTCSessionDescriptionInit): void;
     onAnswer(answer: RTCSessionDescriptionInit): void;
     onPeerDisconnect(): void;
+
+    sendMessage(message: string): void;
 }
 
-class BasePeerTasks implements PeerTasks {
+abstract class BasePeerTasks implements PeerTasks {
     protected peerConnection: RTCPeerConnection;
+    protected dataChannel: RTCDataChannel;
 
     constructor(protected server: SignallingServer) {}
 
@@ -98,6 +108,10 @@ class BasePeerTasks implements PeerTasks {
         }
     }
 
+    sendMessage(message: string): void {
+        this.dataChannel?.send(message);
+    }
+
     private createPeerConnection(): RTCPeerConnection {
         const config: RTCConfiguration = {
             iceServers: [
@@ -116,17 +130,7 @@ class BasePeerTasks implements PeerTasks {
         const remoteStream = new MediaStream();
         remoteVideo.srcObject = remoteStream;
 
-        peerConnection.addEventListener('track', event => {
-            console.log(`Got remote track: ${event.streams[0]}`);
-            event.streams[0].getTracks().forEach(track => {
-                remoteStream.addTrack(track);
-            });
-        });
-
-        const dataChannel = peerConnection.createDataChannel('dataChannel');
-        dataChannel.addEventListener('message', event => {
-            console.log(`Message received: ${event.data}`);
-        });
+        this.setupDataChannel(peerConnection);
 
         peerConnection.addEventListener('icecandidate', event => {
             if (event.candidate) {
@@ -137,6 +141,8 @@ class BasePeerTasks implements PeerTasks {
 
         return peerConnection;
     }
+
+    protected abstract setupDataChannel(peerConnection: RTCPeerConnection): void;
 }
 
 class InitiatorPeerTasks extends BasePeerTasks {
@@ -151,6 +157,13 @@ class InitiatorPeerTasks extends BasePeerTasks {
     onAnswer(answer: RTCSessionDescriptionInit): void {
         this.peerConnection.setRemoteDescription(answer);
     }
+
+    protected setupDataChannel(peerConnection: RTCPeerConnection) {
+        this.dataChannel = peerConnection.createDataChannel('dataChannel');
+        this.dataChannel.addEventListener('message', event => {
+            console.log(`Message received: ${event.data}`);
+        });
+    }
 }
 
 class ResponderPeerTasks extends BasePeerTasks {
@@ -160,5 +173,18 @@ class ResponderPeerTasks extends BasePeerTasks {
 
     onOffer(offer: RTCSessionDescriptionInit): void {
         this.peerConnection.setRemoteDescription(offer);
+        this.peerConnection.createAnswer().then(answer => {
+            this.peerConnection.setLocalDescription(answer);
+            this.server.sendAnswer(answer);
+        });
+    }
+
+    protected setupDataChannel(peerConnection: RTCPeerConnection) {
+        peerConnection.addEventListener('datachannel', event => {
+            this.dataChannel = event.channel;
+            this.dataChannel.addEventListener('message', event => {
+                console.log(`Message received: ${event.data}`);
+            });
+        });
     }
 }
