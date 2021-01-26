@@ -8,8 +8,9 @@ export class SignallingServer {
 
     async connect(token: string): Promise<SignallingConnection> {
         return new Promise((resolve, reject) => {
-            this.socket = new WebSocket(this.options.serverHost);
+            this.socket = new WebSocket(this.options.serverUrl);
             this.socket.addEventListener('open', () => {
+                console.log('Connection opened');
                 resolve(new InternalSignallingConnection(this.socket!, token));
             });
         });
@@ -144,7 +145,7 @@ class InternalSignallingConnection implements SignallingConnection {
 }
 
 export interface SignallingOptions {
-    serverHost: string;
+    serverUrl: string;
 }
 
 export type Role = 'initiator' | 'responder';

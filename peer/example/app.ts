@@ -22,7 +22,7 @@ disconnectButton.addEventListener('click', () => {
 });
 
 async function connect(role: 'initiator' | 'responder', token: string) {
-    const server = new SignallingServer({serverHost: 'localhost'});
+    const server = new SignallingServer({serverUrl: 'ws://localhost:8080/'});
     const connection = await server.connect(token);
     const peerTasks = role === 'initiator' ? new InitiatorPeerTasks(connection) : new ResponderPeerTasks(connection);
 
