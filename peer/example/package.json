@@ -11,5 +11,8 @@
     },
     "dependencies": {
         "thingrtc-peer": "file:../"
-    }
+    },
+    "browserslist": [
+        "last 1 Chrome version"
+    ]
 }
