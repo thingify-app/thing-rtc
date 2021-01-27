@@ -11,6 +11,8 @@
         <label for="responder">Responder</label>
         <p>Responder ID:</p>
         <p><input type="text" id="responderId"/></p>
+        <p>Send video:</p>
+        <p><input type="checkbox" id="sendVideo"/></p>
         <p><button id="connectButton">Connect</button></p>
         <p><button id="disconnectButton">Disconnect</button></p>
         <p>Message:</p>
@@ -18,6 +20,9 @@
             <input type="text" id="message"/>
             <button id="sendMessageButton">Send</button>
         </p>
+        <p>Local video:</p>
+        <p><video id="localVideo" autoplay playsinline></video></p>
+        <p>Remote video:</p>
         <p><video id="remoteVideo" autoplay playsinline></video></p>
 
         <script src="./app.ts"></script>

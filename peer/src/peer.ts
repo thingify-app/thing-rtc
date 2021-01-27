@@ -5,16 +5,21 @@ import { TokenGenerator } from "./token-generator";
 export class ThingPeer {
     private server: SignallingServer;
     private peerTasks?: PeerTasks;
+    private mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
     private messageListener?: (message: string) => void;
 
     constructor(serverUrl: string) {
         this.server = new SignallingServer({serverUrl});
     }
 
-    connect(role: 'initiator' | 'responder', responderId: string, tokenGenerator: TokenGenerator) {
+    connect(role: 'initiator' | 'responder', responderId: string, tokenGenerator: TokenGenerator, mediaStreams: MediaStream[]) {
         this.server.connect(tokenGenerator);
         this.peerTasks = role === 'initiator' ? new InitiatorPeerTasks(this.server) : new ResponderPeerTasks(this.server);
+        this.peerTasks.mediaStreamListener = this.mediaStreamListener;
         this.peerTasks.messageListener = this.messageListener;
+        mediaStreams.forEach(stream => {
+            this.peerTasks!.addMediaStream(stream);
+        });
 
         this.server.on('peerConnect', () => {
             this.peerTasks!.onPeerConnect();
@@ -53,9 +58,16 @@ export class ThingPeer {
         this.peerTasks?.disconnect();
     }
 
+    on(type: 'mediaStream', callback: (mediaStream: MediaStreamTrack) => void): void;
     on(type: 'message', callback: (message: string) => void): void;
     on(type: string, callback: any): void {
         switch (type) {
+            case 'mediaStream':
+                this.mediaStreamListener = callback;
+                if (this.peerTasks) {
+                    this.peerTasks.mediaStreamListener = callback;
+                }
+                break;
             case 'message':
                 this.messageListener = callback;
                 if (this.peerTasks) {
@@ -69,6 +81,7 @@ export class ThingPeer {
 }
 
 interface PeerTasks {
+    mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
     messageListener?: (message: string) => void;
 
     onPeerConnect(): void;
@@ -78,12 +91,15 @@ interface PeerTasks {
     onPeerDisconnect(): void;
 
     sendMessage(message: string): void;
+    addMediaStream(mediaStream: MediaStream): void;
     disconnect(): void;
 }
 
 abstract class BasePeerTasks implements PeerTasks {
     protected peerConnection?: RTCPeerConnection;
     protected dataChannel?: RTCDataChannel;
+    private localMediaStream?: MediaStream;
+    mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
     messageListener?: (message: string) => void;
 
     constructor(protected server: SignallingServer) {}
@@ -117,6 +133,10 @@ abstract class BasePeerTasks implements PeerTasks {
         this.dataChannel?.send(message);
     }
 
+    addMediaStream(mediaStream: MediaStream): void {
+        this.localMediaStream = mediaStream;
+    }
+
     disconnect(): void {
         this.dataChannel?.close();
         this.peerConnection?.close();
@@ -137,10 +157,16 @@ abstract class BasePeerTasks implements PeerTasks {
         };
 
         const peerConnection = new RTCPeerConnection(config);
-        peerConnection.addTransceiver('video');
 
-        const remoteStream = new MediaStream();
-        // remoteVideo.srcObject = remoteStream;
+        this.localMediaStream?.getTracks()?.forEach(track => {
+            console.log('Adding local track');
+            peerConnection.addTrack(track);
+        });
+
+        peerConnection.addEventListener('track', event => {
+            console.log('Remote track event received');
+            this.mediaStreamListener?.(event.track);
+        });
 
         this.setupDataChannel(peerConnection);
 
@@ -160,6 +186,9 @@ abstract class BasePeerTasks implements PeerTasks {
 class InitiatorPeerTasks extends BasePeerTasks {
     onPeerConnect(): void {
         super.onPeerConnect();
+        // For some reason, it appears that only the initiator can set this up.
+        // Not entirely sure why yet.
+        this.peerConnection?.addTransceiver('video');
         this.peerConnection?.createOffer().then(offer => {
             this.peerConnection?.setLocalDescription(offer);
             this.server.sendOffer(offer);
