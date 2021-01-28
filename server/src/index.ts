@@ -8,9 +8,9 @@ export class ThingServer {
     private authValidator = new ParseThroughAuthValidator();
     private wss: WebSocket.Server;
 
-    constructor(port: number) {
-        this.wss = new WebSocket.Server({ port });
-        console.log(`Listening on port ${port}...`);
+    constructor(existingServer: any = null, port: number = null) {
+        this.wss = new WebSocket.Server({ server: existingServer, port });
+        console.log('Listening...');
 
         this.wss.on('error', error => {
             console.error(error);

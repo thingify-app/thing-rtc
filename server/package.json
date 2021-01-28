@@ -6,6 +6,7 @@
     "start": "node ./cli.js",
     "postinstall": "npm run build",
     "build": "tsc",
+    "buildWatch": "tsc -w",
     "serve": "nodemon --watch src -e ts --exec npm-run-all build start",
     "test": "mocha -r ts-node/register test/**/*.test.ts"
   },

@@ -5,8 +5,8 @@ set -e
 # Trap signals so that we kill child processes before exiting.
 trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
 
-# Start up server in background.
-npm --prefix server run serve &
+# Live-compile server library in background.
+npm --prefix server run buildWatch &
 
 # Live-compile peer library in background.
 npm --prefix peer run buildWatch &
