@@ -1,5 +1,5 @@
 {
-    "name": "thingrtc-peer-example",
+    "name": "thingrtc-example",
     "scripts": {
         "build": "parcel build index.html",
         "serve": "parcel index.html"
@@ -10,7 +10,7 @@
         "typescript": "^4.0.5"
     },
     "dependencies": {
-        "thingrtc-peer": "file:../"
+        "thingrtc-peer": "file:../peer"
     },
     "browserslist": [
         "last 1 Chrome version"

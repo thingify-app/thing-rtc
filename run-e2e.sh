@@ -12,7 +12,7 @@ npm --prefix server run serve &
 npm --prefix peer run buildWatch &
 
 # Serve example in background.
-npm --prefix peer/example run serve &
+npm --prefix example run serve &
 
 # Keep running until we kill the script and all child processes.
 wait
