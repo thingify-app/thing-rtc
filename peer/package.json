@@ -6,6 +6,7 @@
         "dist/"
     ],
     "scripts": {
+        "postinstall": "npm run build",
         "clean": "rm -r dist",
         "build": "tsc",
         "buildWatch": "tsc -w"
