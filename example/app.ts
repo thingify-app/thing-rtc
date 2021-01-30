@@ -13,7 +13,8 @@ const remoteVideo = document.getElementById('remoteVideo') as HTMLVideoElement;
 
 const remoteMediaStream = new MediaStream();
 
-const peer = new ThingPeer('ws://localhost:8080/');
+const protocol = location.protocol === 'http:' ? 'ws' : 'wss';
+const peer = new ThingPeer(`${protocol}://${location.host}/`);
 peer.on('message', message => {
     console.log(`Message received: ${message}`);
 });

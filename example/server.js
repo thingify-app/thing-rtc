@@ -7,6 +7,6 @@ const port = process.env.PORT || 8080;
 
 const server = express()
     .use(express.static('dist'))
-    .listen(port, () => console.log(`Listening on ${port}`));
+    .listen(port, '0.0.0.0', () => console.log(`Listening on ${port}`));
 
 new ThingServer(server);
