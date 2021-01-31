@@ -15,6 +15,12 @@ const remoteMediaStream = new MediaStream();
 
 const protocol = location.protocol === 'http:' ? 'ws' : 'wss';
 const peer = new ThingPeer(`${protocol}://${location.host}/`);
+peer.on('connectionStateChanged', state => {
+    console.log(`Peer connection state: ${state}`);
+    if (state === 'disconnected') {
+        remoteMediaStream.getTracks().forEach(track => remoteMediaStream.removeTrack(track));
+    }
+});
 peer.on('message', message => {
     console.log(`Message received: ${message}`);
 });

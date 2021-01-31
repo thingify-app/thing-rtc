@@ -4,6 +4,7 @@ import { TokenGenerator } from "./token-generator";
 /** Wraps the entire process of setting up a P2P connection. */
 export class ThingPeer {
     private peerTasks?: PeerTasks;
+    private connectionStateListener?: (state: ConnectionState) => void;
     private mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
     private messageListener?: (message: string) => void;
 
@@ -12,6 +13,7 @@ export class ThingPeer {
     connect(role: 'initiator' | 'responder', responderId: string, tokenGenerator: TokenGenerator, mediaStreams: MediaStream[]) {
         const server = new SignallingServer({serverUrl: this.serverUrl});
         this.peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server, tokenGenerator) : new ResponderPeerTasks(server, tokenGenerator);
+        this.peerTasks.connectionStateListener = this.connectionStateListener;
         this.peerTasks.mediaStreamListener = this.mediaStreamListener;
         this.peerTasks.messageListener = this.messageListener;
         mediaStreams.forEach(stream => {
@@ -27,10 +29,17 @@ export class ThingPeer {
         this.peerTasks?.disconnect();
     }
 
+    on(type: 'connectionStateChanged', callback: (state: ConnectionState) => void): void;
     on(type: 'mediaStream', callback: (mediaStream: MediaStreamTrack) => void): void;
     on(type: 'message', callback: (message: string) => void): void;
     on(type: string, callback: any): void {
         switch (type) {
+            case 'connectionStateChanged':
+                this.connectionStateListener = callback;
+                if (this.peerTasks) {
+                    this.peerTasks.connectionStateListener = callback;
+                }
+                break;
             case 'mediaStream':
                 this.mediaStreamListener = callback;
                 if (this.peerTasks) {
@@ -49,7 +58,10 @@ export class ThingPeer {
     }
 }
 
+export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
+
 interface PeerTasks {
+    connectionStateListener?: (state: ConnectionState) => void;
     mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
     messageListener?: (message: string) => void;
 
@@ -68,6 +80,7 @@ abstract class BasePeerTasks implements PeerTasks {
     protected peerConnection?: RTCPeerConnection;
     protected dataChannel?: RTCDataChannel;
     private localMediaStream?: MediaStream;
+    connectionStateListener?: (state: ConnectionState) => void;
     mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
     messageListener?: (message: string) => void;
 
@@ -85,6 +98,7 @@ abstract class BasePeerTasks implements PeerTasks {
     }
 
     onPeerConnect(): void {
+        this.connectionStateListener?.('connecting');
         if (this.peerConnection?.connectionState !== 'connected') {
             // If we're not connected and the peer is trying to connect again,
             // we probably failed the initial signalling.
@@ -92,14 +106,6 @@ abstract class BasePeerTasks implements PeerTasks {
             this.peerConnection = undefined;
         }
         this.peerConnection = this.createPeerConnection();
-        // Once we have reached peer connected state, we should disconnect from server.
-        this.peerConnection.addEventListener('connectionstatechange', event => {
-            const state = this.peerConnection?.connectionState;
-            console.log(`Connection state: ${state}`);
-            if (state === 'connected') {
-                this.server.disconnect();
-            }
-        });
     }
 
     onIceCandidate(candidate: RTCIceCandidate): void {
@@ -131,6 +137,7 @@ abstract class BasePeerTasks implements PeerTasks {
         this.peerConnection?.close();
         this.dataChannel = undefined;
         this.peerConnection = undefined;
+        this.connectionStateListener?.('disconnected');
     }
 
     private createPeerConnection(): RTCPeerConnection {
@@ -146,6 +153,21 @@ abstract class BasePeerTasks implements PeerTasks {
         };
 
         const peerConnection = new RTCPeerConnection(config);
+
+        peerConnection.addEventListener('connectionstatechange', event => {
+            const state = this.peerConnection?.connectionState;
+            console.log(`Connection state: ${state}`);
+            // Once we have reached peer connected state, we should disconnect from server.
+            if (state === 'connected') {
+                this.connectionStateListener?.('connected');
+                this.server.disconnect();
+            } else if (state === 'disconnected' || state === 'failed') {
+                // Disconnect from everything (server and RTC), reconnect to the signalling
+                // server, and start again.
+                this.disconnect();
+                this.server.connect(this.tokenGenerator);
+            }
+        });
 
         this.localMediaStream?.getTracks()?.forEach(track => {
             console.log('Adding local track');
