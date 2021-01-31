@@ -105,15 +105,26 @@ export class Server {
         switch (authState.role) {
           case 'initiator':
             connectionPair.initiatorConnection = null;
+            this.sendPeerDisconnectMessage(connectionPair.responderConnection);
             break;
           case 'responder':
             connectionPair.responderConnection = null;
+            this.sendPeerDisconnectMessage(connectionPair.initiatorConnection);
         }
 
         if (connectionPair.initiatorConnection === null && connectionPair.responderConnection === null) {
           this.responderConnectionMap.delete(authState.responderId);
         }
       }
+    }
+  }
+  
+  private sendPeerDisconnectMessage(connection: Connection) {
+    const message = JSON.stringify({
+      type: 'peerDisconnect'
+    });
+    if (connection) {
+      connection.sendMessage(message);
     }
   }
 }

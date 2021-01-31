@@ -88,6 +88,38 @@ describe('server', function() {
     assert.calledOnceWithExactly(responderSendMessageCallback, '{"type":"peerConnect"}');
   });
 
+  it('sends peerDisconnect message to initiator', function () {
+    server.onConnection(connection);
+    server.onAuthMessage(connection, {role: 'initiator', responderId: 'abc', expiry: 0});
+
+    const responderConnection: Connection = {
+      sendMessage: fake(),
+      disconnect: fake()
+    };
+    server.onConnection(responderConnection);
+    server.onAuthMessage(responderConnection, {role: 'responder', responderId: 'abc', expiry: 0});
+
+    server.onDisconnection(responderConnection);
+
+    assert.calledWithExactly(sendMessageCallback, '{"type":"peerDisconnect"}');
+  });
+  
+  it('sends peerDisconnect message to responder', function () {
+    server.onConnection(connection);
+    server.onAuthMessage(connection, {role: 'responder', responderId: 'abc', expiry: 0});
+
+    const initiatorConnection: Connection = {
+      sendMessage: fake(),
+      disconnect: fake()
+    };
+    server.onConnection(initiatorConnection);
+    server.onAuthMessage(initiatorConnection, {role: 'initiator', responderId: 'abc', expiry: 0});
+
+    server.onDisconnection(initiatorConnection);
+
+    assert.calledWithExactly(sendMessageCallback, '{"type":"peerDisconnect"}');
+  });
+
   it('relays message from initiator to responder', function() {
     server.onConnection(connection);
     server.onAuthMessage(connection, {role: 'initiator', responderId: 'abc', expiry: 0});
