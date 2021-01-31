@@ -3,49 +3,19 @@ import { TokenGenerator } from "./token-generator";
 
 /** Wraps the entire process of setting up a P2P connection. */
 export class ThingPeer {
-    private server: SignallingServer;
     private peerTasks?: PeerTasks;
     private mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
     private messageListener?: (message: string) => void;
 
-    constructor(serverUrl: string) {
-        this.server = new SignallingServer({serverUrl});
-    }
+    constructor(private serverUrl: string) {}
 
     connect(role: 'initiator' | 'responder', responderId: string, tokenGenerator: TokenGenerator, mediaStreams: MediaStream[]) {
-        this.server.connect(tokenGenerator);
-        this.peerTasks = role === 'initiator' ? new InitiatorPeerTasks(this.server) : new ResponderPeerTasks(this.server);
+        const server = new SignallingServer({serverUrl: this.serverUrl});
+        this.peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server, tokenGenerator) : new ResponderPeerTasks(server, tokenGenerator);
         this.peerTasks.mediaStreamListener = this.mediaStreamListener;
         this.peerTasks.messageListener = this.messageListener;
         mediaStreams.forEach(stream => {
             this.peerTasks!.addMediaStream(stream);
-        });
-
-        this.server.on('peerConnect', () => {
-            this.peerTasks!.onPeerConnect();
-        });
-
-        this.server.on('iceCandidate', iceCandidate => {
-            this.peerTasks!.onIceCandidate(iceCandidate);
-        });
-
-        this.server.on('offer', offer => {
-            this.peerTasks!.onOffer(offer);
-        });
-
-        this.server.on('answer', answer => {
-            this.peerTasks!.onAnswer(answer);
-        });
-
-        this.server.on('peerDisconnect', () => {
-            // If we have not reached "connected" state with peer, tear down PeerConnection and all associated listeners etc.
-            // Otherwise, ignore event.
-            this.peerTasks!.onPeerDisconnect();
-        });
-
-        this.server.on('error', () => {
-            // This indicates a disconnect from the server (not initiated by us).
-            // We should try from the start again if we haven't got a peer connection yet.
         });
     }
 
@@ -54,7 +24,6 @@ export class ThingPeer {
     }
 
     disconnect() {
-        this.server.disconnect();
         this.peerTasks?.disconnect();
     }
 
@@ -102,13 +71,32 @@ abstract class BasePeerTasks implements PeerTasks {
     mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
     messageListener?: (message: string) => void;
 
-    constructor(protected server: SignallingServer) {}
+    constructor(protected server: SignallingServer, private tokenGenerator: TokenGenerator) {
+        this.server.connect(tokenGenerator);
+        this.server.on('peerConnect', () => this.onPeerConnect());
+        this.server.on('iceCandidate', candidate => this.onIceCandidate(candidate));
+        this.server.on('offer', offer => this.onOffer(offer));
+        this.server.on('answer', answer => this.onAnswer(answer));
+        this.server.on('peerDisconnect', () => this.onPeerDisconnect());
+        this.server.on('error', () => {
+            // This indicates a disconnect from the server (not initiated by us).
+            // We should try from the start again if we haven't got a peer connection yet.
+        });
+    }
 
     onPeerConnect(): void {
+        if (this.peerConnection?.connectionState !== 'connected') {
+            // If we're not connected and the peer is trying to connect again,
+            // we probably failed the initial signalling.
+            this.peerConnection?.close();
+            this.peerConnection = undefined;
+        }
         this.peerConnection = this.createPeerConnection();
         // Once we have reached peer connected state, we should disconnect from server.
         this.peerConnection.addEventListener('connectionstatechange', event => {
-            if (this.peerConnection!.connectionState === 'connected') {
+            const state = this.peerConnection?.connectionState;
+            console.log(`Connection state: ${state}`);
+            if (state === 'connected') {
                 this.server.disconnect();
             }
         });
@@ -123,10 +111,10 @@ abstract class BasePeerTasks implements PeerTasks {
     onAnswer(answer: RTCSessionDescriptionInit): void {}
 
     onPeerDisconnect(): void {
-        if (this.peerConnection?.connectionState !== 'connected') {
-            this.peerConnection?.close();
-            this.peerConnection = undefined;
-        }
+        console.log('Peer disconnected.');
+        // Don't do anything, as there may be a race condition between us and
+        // the other peer reaching a "connected" RTC state, after which they
+        // disconnect.
     }
 
     sendMessage(message: string): void {
@@ -138,6 +126,7 @@ abstract class BasePeerTasks implements PeerTasks {
     }
 
     disconnect(): void {
+        this.server.disconnect();
         this.dataChannel?.close();
         this.peerConnection?.close();
         this.dataChannel = undefined;

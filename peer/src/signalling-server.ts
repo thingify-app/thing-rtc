@@ -1,10 +1,9 @@
-// Websocket layer which talks to server
-// abstract websocket
-
 import { TokenGenerator } from "./token-generator";
 
+/** Abstracts two-way communication with the Signalling Server. */
 export class SignallingServer {
     private socket?: WebSocket;
+    private messageQueue: any[] = [];
 
     private peerConnectListener?: () => void;
     private iceCandidateListener?: (candidate: RTCIceCandidate) => void;
@@ -15,11 +14,13 @@ export class SignallingServer {
 
     constructor(private options: SignallingOptions) {}
 
-    connect(tokenGenerator: TokenGenerator) {
+    connect(tokenGenerator: TokenGenerator): void {
         this.socket = new WebSocket(this.options.serverUrl);
         this.socket.addEventListener('open', () => {
             const token = tokenGenerator.generateToken();
             this.sendAuthMessage(token);
+            // TODO: look into whether we need to await some kind of auth confirmation.
+            this.flushQueue();
         });
         this.socket.addEventListener('message', event => {
             this.handleMessage(event.data);
@@ -39,7 +40,13 @@ export class SignallingServer {
         });
     }
 
-    private handleMessage(message: any) {
+    private flushQueue(): void {
+        while (this.messageQueue.length > 0) {
+            this.sendMessage(this.messageQueue.shift());
+        }
+    }
+
+    private handleMessage(message: any): void {
         if (message && typeof(message) === 'string') {
             const json = JSON.parse(message);
             if (json && json.type) {
@@ -100,33 +107,46 @@ export class SignallingServer {
     }
 
     sendIceCandidate(candidate: RTCIceCandidate): void {
-        this.sendMessage({
+        this.queueMessage({
             type: 'iceCandidate',
             candidate: candidate.toJSON()
         });
     }
 
     sendOffer(offer: RTCSessionDescriptionInit): void {
-        this.sendMessage({
+        this.queueMessage({
             type: 'offer',
             offer: offer
         });
     }
 
     sendAnswer(answer: RTCSessionDescriptionInit): void {
-        this.sendMessage({
+        this.queueMessage({
             type: 'answer',
             answer: answer
         });
     }
 
-    private sendMessage(data: any) {
+    private queueMessage(data: any): void {
+        if (this.isConnected()) {
+            this.sendMessage(data);
+        } else {
+            this.messageQueue.push(data);
+        }
+    }
+
+    private sendMessage(data: any): void {
         this.socket?.send(JSON.stringify(data));
+    }
+
+    isConnected(): boolean {
+        return this.socket?.readyState === WebSocket.OPEN;
     }
 
     disconnect(): void {
         this.socket?.close();
         this.socket = undefined;
+        this.messageQueue = [];
     }
 }
 
