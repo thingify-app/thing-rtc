@@ -25,8 +25,8 @@ export class MessageParser {
     }
 
     private parseAuthMessage(json: any): AuthMessage {
-        if (json.token && typeof(json.token) === 'string') {
-            return this.authValidator.validateToken(json.token);
+        if (json.data && typeof(json.data) === 'string') {
+            return this.authValidator.validateToken(json.data);
         } else {
             throw new Error('Invalid auth message.');
         }

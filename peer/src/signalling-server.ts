@@ -3,7 +3,7 @@ import { TokenGenerator } from "./token-generator";
 /** Abstracts two-way communication with the Signalling Server. */
 export class SignallingServer {
     private socket?: WebSocket;
-    private messageQueue: any[] = [];
+    private messageQueue: {type: string, data: any}[] = [];
 
     private peerConnectListener?: () => void;
     private iceCandidateListener?: (candidate: RTCIceCandidate) => void;
@@ -34,15 +34,13 @@ export class SignallingServer {
     }
 
     private sendAuthMessage(token: string) {
-        this.sendMessage({
-            type: 'auth',
-            token: token
-        });
+        this.sendMessage('auth', token);
     }
 
     private flushQueue(): void {
         while (this.messageQueue.length > 0) {
-            this.sendMessage(this.messageQueue.shift());
+            const message = this.messageQueue.shift()!;
+            this.sendMessage(message.type, message.data);
         }
     }
 
@@ -50,18 +48,19 @@ export class SignallingServer {
         if (message && typeof(message) === 'string') {
             const json = JSON.parse(message);
             if (json && json.type) {
+                const data = json.data ? JSON.parse(json.data) : null;
                 switch (json.type) {
                     case 'peerConnect':
                         this.peerConnectListener?.();
                         break;
                     case 'iceCandidate':
-                        this.iceCandidateListener?.(json.candidate);
+                        this.iceCandidateListener?.(data);
                         break;
                     case 'offer':
-                        this.offerListener?.(json.offer);
+                        this.offerListener?.(data);
                         break;
                     case 'answer':
-                        this.answerListener?.(json.answer);
+                        this.answerListener?.(data);
                         break;
                     case 'peerDisconnect':
                         this.peerDisconnectListener?.();
@@ -107,36 +106,32 @@ export class SignallingServer {
     }
 
     sendIceCandidate(candidate: RTCIceCandidate): void {
-        this.queueMessage({
-            type: 'iceCandidate',
-            candidate: candidate.toJSON()
-        });
+        this.queueMessage('iceCandidate', candidate.toJSON());
     }
 
     sendOffer(offer: RTCSessionDescriptionInit): void {
-        this.queueMessage({
-            type: 'offer',
-            offer: offer
-        });
+        this.queueMessage('offer', offer);
     }
 
     sendAnswer(answer: RTCSessionDescriptionInit): void {
-        this.queueMessage({
-            type: 'answer',
-            answer: answer
-        });
+        this.queueMessage('answer', answer);
     }
 
-    private queueMessage(data: any): void {
+    private queueMessage(type: string, data: any): void {
         if (this.isConnected()) {
-            this.sendMessage(data);
+            this.sendMessage(type, data);
         } else {
-            this.messageQueue.push(data);
+            this.messageQueue.push({type, data});
         }
     }
 
-    private sendMessage(data: any): void {
-        this.socket?.send(JSON.stringify(data));
+    private sendMessage(type: string, data: any): void {
+        // Two levels of stringify, so that data can be parsed independently
+        // after type is parsed.
+        this.socket?.send(JSON.stringify({
+            type: type,
+            data: typeof(data) === 'string' ? data : JSON.stringify(data)
+        }));
     }
 
     isConnected(): boolean {

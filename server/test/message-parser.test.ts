@@ -29,12 +29,12 @@ describe('MessageParser', function() {
   });
 
   it('calls the correct handler for a content message', function() {
-    messageParser.parseMessage('{"type": "offer", "offer": "hello"}');
-    assert.calledWithExactly(handleContentMessage, '{"type": "offer", "offer": "hello"}');
+    messageParser.parseMessage('{"type": "offer", "data": "hello"}');
+    assert.calledWithExactly(handleContentMessage, '{"type": "offer", "data": "hello"}');
   });
 
   it('calls the correct handler for an auth message', function() {
-    messageParser.parseMessage('{"type": "auth", "token": "abc"}');
+    messageParser.parseMessage('{"type": "auth", "data": "abc"}');
     assert.calledWithExactly(handleAuthMessage, { responderId: 'abc', role: 'initiator', expiry: 0 });
   });
 
