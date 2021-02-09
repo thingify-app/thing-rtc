@@ -1,8 +1,11 @@
+import { ConstantRetry, Retry } from "./retry";
 import { TokenGenerator } from "./token-generator";
 
 /** Abstracts two-way communication with the Signalling Server. */
 export class SignallingServer {
     private socket?: WebSocket;
+    private state: State = 'disconnected';
+    private retry: Retry = new ConstantRetry();
     private messageQueue: {type: string, data: any}[] = [];
 
     private peerConnectListener?: () => void;
@@ -15,6 +18,7 @@ export class SignallingServer {
     constructor(private options: SignallingOptions) {}
 
     connect(tokenGenerator: TokenGenerator): void {
+        this.state = 'connected';
         this.socket = new WebSocket(this.options.serverUrl);
         this.socket.addEventListener('open', () => {
             const token = tokenGenerator.generateToken();
@@ -26,10 +30,22 @@ export class SignallingServer {
             this.handleMessage(event.data);
         });
         this.socket.addEventListener('error', () => {
-            this.errorListener?.();
+            console.log('Socket error.');
+            this.retry.retry(() => {
+                this.socket?.close();
+                this.connect(tokenGenerator);
+            });
         });
         this.socket.addEventListener('close', () => {
-            this.errorListener?.();
+            console.log('Socket close.');
+            // Only retry if we are still actively trying to maintain a connection,
+            // otherwise ourselves disconnecting will endlessly trigger this.
+            if (this.state === 'connected') {
+                this.retry.retry(() => {
+                    this.socket?.close();
+                    this.connect(tokenGenerator);
+                });
+            }
         });
     }
 
@@ -139,6 +155,7 @@ export class SignallingServer {
     }
 
     disconnect(): void {
+        this.state = 'disconnected';
         this.socket?.close();
         this.socket = undefined;
         this.messageQueue = [];
@@ -148,3 +165,9 @@ export class SignallingServer {
 export interface SignallingOptions {
     serverUrl: string;
 }
+
+/**
+ * Current desired state - connected meaning that we want to be connected, not
+ * necessarily that we are connected.
+ */
+type State = 'disconnected' | 'connected';
