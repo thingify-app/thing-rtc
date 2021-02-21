@@ -1,17 +1,19 @@
 {
     "name": "thingrtc-peer",
+    "version": "0.0.0",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "files": [
         "dist/"
     ],
     "scripts": {
-        "postinstall": "npm run build",
         "clean": "rm -r dist",
         "build": "tsc",
         "buildWatch": "tsc -w"
     },
-    "private": true,
+    "publishConfig": {
+        "registry": "http://localhost:4873"
+    },
     "devDependencies": {
         "typescript": "^4.0.5"
     },
