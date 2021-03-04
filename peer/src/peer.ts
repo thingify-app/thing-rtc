@@ -211,7 +211,7 @@ class InitiatorPeerTasks extends BasePeerTasks {
     }
 
     protected setupDataChannel(peerConnection: RTCPeerConnection) {
-        this.dataChannel = peerConnection.createDataChannel('dataChannel');
+        this.dataChannel = peerConnection.createDataChannel('dataChannel', {ordered: true, maxRetransmits: 0});
         this.dataChannel.addEventListener('message', event => {
             this.messageListener?.(event.data);
         });
