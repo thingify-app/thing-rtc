@@ -21,7 +21,7 @@ export class ThingPeer {
         });
     }
 
-    sendMessage(message: string): void {
+    sendMessage(message: string|ArrayBuffer): void {
         this.peerTasks?.sendMessage(message);
     }
 
@@ -71,7 +71,7 @@ interface PeerTasks {
     onAnswer(answer: RTCSessionDescriptionInit): void;
     onPeerDisconnect(): void;
 
-    sendMessage(message: string): void;
+    sendMessage(message: string|ArrayBuffer): void;
     addMediaStream(mediaStream: MediaStream): void;
     disconnect(): void;
 }
@@ -123,7 +123,8 @@ abstract class BasePeerTasks implements PeerTasks {
         // disconnect.
     }
 
-    sendMessage(message: string): void {
+    sendMessage(message: string | ArrayBuffer): void;
+    sendMessage(message: any): void {
         this.dataChannel?.send(message);
     }
 
