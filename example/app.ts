@@ -21,8 +21,12 @@ peer.on('connectionStateChanged', state => {
         remoteMediaStream.getTracks().forEach(track => remoteMediaStream.removeTrack(track));
     }
 });
-peer.on('message', message => {
-    console.log(`Message received: ${message}`);
+peer.on('stringMessage', message => {
+    console.log(`String message received: ${message}`);
+});
+peer.on('binaryMessage', message => {
+    console.log('Binary message received:');
+    console.log(message);
 });
 peer.on('mediaStream', track => {
     console.log('Received track');

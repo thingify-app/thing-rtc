@@ -6,7 +6,8 @@ export class ThingPeer {
     private peerTasks?: PeerTasks;
     private connectionStateListener?: (state: ConnectionState) => void;
     private mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
-    private messageListener?: (message: string) => void;
+    private stringMessageListener?: (message: string) => void;
+    private binaryMessageListener?: (message: ArrayBuffer) => void;
 
     constructor(private serverUrl: string) {}
 
@@ -15,7 +16,8 @@ export class ThingPeer {
         this.peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server, tokenGenerator) : new ResponderPeerTasks(server, tokenGenerator);
         this.peerTasks.connectionStateListener = this.connectionStateListener;
         this.peerTasks.mediaStreamListener = this.mediaStreamListener;
-        this.peerTasks.messageListener = this.messageListener;
+        this.peerTasks.stringMessageListener = this.stringMessageListener;
+        this.peerTasks.binaryMessageListener = this.binaryMessageListener;
         mediaStreams.forEach(stream => {
             this.peerTasks!.addMediaStream(stream);
         });
@@ -31,7 +33,8 @@ export class ThingPeer {
 
     on(type: 'connectionStateChanged', callback: (state: ConnectionState) => void): void;
     on(type: 'mediaStream', callback: (mediaStream: MediaStreamTrack) => void): void;
-    on(type: 'message', callback: (message: string) => void): void;
+    on(type: 'stringMessage', callback: (message: string) => void): void;
+    on(type: 'binaryMessage', callback: (message: Uint8Array) => void): void;
     on(type: string, callback: any): void {
         switch (type) {
             case 'connectionStateChanged':
@@ -46,10 +49,16 @@ export class ThingPeer {
                     this.peerTasks.mediaStreamListener = callback;
                 }
                 break;
-            case 'message':
-                this.messageListener = callback;
+            case 'stringMessage':
+                this.stringMessageListener = callback;
                 if (this.peerTasks) {
-                    this.peerTasks.messageListener = callback;
+                    this.peerTasks.stringMessageListener = callback;
+                }
+                break;
+            case 'binaryMessage':
+                this.binaryMessageListener = callback;
+                if (this.peerTasks) {
+                    this.peerTasks.binaryMessageListener = callback;
                 }
                 break;
             default:
@@ -63,7 +72,8 @@ export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 interface PeerTasks {
     connectionStateListener?: (state: ConnectionState) => void;
     mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
-    messageListener?: (message: string) => void;
+    stringMessageListener?: (message: string) => void;
+    binaryMessageListener?: (message: ArrayBuffer) => void;
 
     onPeerConnect(): void;
     onIceCandidate(candidate: RTCIceCandidate): void;
@@ -82,7 +92,8 @@ abstract class BasePeerTasks implements PeerTasks {
     private localMediaStream?: MediaStream;
     connectionStateListener?: (state: ConnectionState) => void;
     mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
-    messageListener?: (message: string) => void;
+    stringMessageListener?: (message: string) => void;
+    binaryMessageListener?: (message: ArrayBuffer) => void;
 
     constructor(protected server: SignallingServer, private tokenGenerator: TokenGenerator) {
         this.server.connect(tokenGenerator);
@@ -193,6 +204,16 @@ abstract class BasePeerTasks implements PeerTasks {
     }
 
     protected abstract setupDataChannel(peerConnection: RTCPeerConnection): void;
+
+    protected onDataChannelMessage(message: any) {
+        if (typeof message === 'string') {
+            this.stringMessageListener?.(message);
+        } else if (message instanceof ArrayBuffer) {
+            this.binaryMessageListener?.(message);
+        } else {
+            console.error('Unknown message type received.');
+        }
+    }
 }
 
 class InitiatorPeerTasks extends BasePeerTasks {
@@ -214,7 +235,7 @@ class InitiatorPeerTasks extends BasePeerTasks {
     protected setupDataChannel(peerConnection: RTCPeerConnection) {
         this.dataChannel = peerConnection.createDataChannel('dataChannel', {ordered: true, maxRetransmits: 0});
         this.dataChannel.addEventListener('message', event => {
-            this.messageListener?.(event.data);
+            this.onDataChannelMessage(event.data);
         });
     }
 }
@@ -236,7 +257,7 @@ class ResponderPeerTasks extends BasePeerTasks {
         peerConnection.addEventListener('datachannel', event => {
             this.dataChannel = event.channel;
             this.dataChannel.addEventListener('message', event => {
-                this.messageListener?.(event.data);
+                this.onDataChannelMessage(event.data);
             });
         });
     }
