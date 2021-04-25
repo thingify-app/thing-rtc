@@ -11,7 +11,7 @@ export class PairingServer {
 
     constructor(
         private storage: Storage,
-        private privateKey: string,
+        private privateKey: string | Buffer,
         private currentMillis: () => number = () => Date.now()
     ) {}
 
