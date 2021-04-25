@@ -1,5 +1,5 @@
 import * as jwt from 'jsonwebtoken';
-import { AuthEntry, AuthStorage } from './storage';
+import { PairingEntry, Storage } from './storage';
 import { generatePairingId, generateShortcode } from './utils';
 
 const JWT_OPTIONS: jwt.SignOptions = {
@@ -7,10 +7,10 @@ const JWT_OPTIONS: jwt.SignOptions = {
 };
 const EXPIRY_MILLIS = 60*1000;
 
-export class AuthServer {
+export class PairingServer {
 
     constructor(
-        private storage: AuthStorage,
+        private storage: Storage,
         private privateKey: string,
         private currentMillis: () => number = () => Date.now()
     ) {}
@@ -20,7 +20,7 @@ export class AuthServer {
         const shortcode = generateShortcode();
         const expiry = this.currentMillis() + EXPIRY_MILLIS;
 
-        const entry: AuthEntry = {
+        const entry: PairingEntry = {
             pairingId,
             expiry,
             shortcode,

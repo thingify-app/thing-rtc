@@ -1,8 +1,8 @@
-import { AuthServer } from '../src/auth-server';
+import { PairingServer } from '../src/pairing-server';
 import { expect } from 'chai';
 import { generateKeyPairSync } from 'crypto';
 import 'mocha';
-import { AuthStorage, InMemoryAuthStorage } from '../src/storage';
+import { Storage, InMemoryStorage } from '../src/storage';
 import * as jwt from 'jsonwebtoken';
 
 describe('server', function() {
@@ -17,14 +17,14 @@ describe('server', function() {
       format: 'pem'
     }
   });
-  let server: AuthServer;
-  let storage: AuthStorage;
+  let server: PairingServer;
+  let storage: Storage;
   let currentTimeMillis: number;
 
   beforeEach(() => {
     currentTimeMillis = 0;
-    storage = new InMemoryAuthStorage();
-    server = new AuthServer(storage, keyPair.privateKey, () => currentTimeMillis);
+    storage = new InMemoryStorage();
+    server = new PairingServer(storage, keyPair.privateKey, () => currentTimeMillis);
   });
 
   it('pairing request returns expected values', function() {

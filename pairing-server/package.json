@@ -1,5 +1,5 @@
 {
-  "name": "thingrtc-auth-server",
+  "name": "thingrtc-pairing-server",
   "main": "dist/index.js",
   "bin": "cli.js",
   "scripts": {

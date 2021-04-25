@@ -1,6 +1,6 @@
 import * as express from 'express';
 
-export class AuthServer {
+export class Server {
     constructor(port: number = 8080) {
         const parsedPort = port || parseInt(process.env.PORT || '8080');
         const app = express();
