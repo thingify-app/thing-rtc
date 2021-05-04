@@ -6,6 +6,6 @@ rm -r example/node_modules
 rm -r example/.cache
 rm -r example/dist
 
-rm -r server/node_modules
-rm -r server/.cache
-rm -r server/dist
+rm -r signalling-server/node_modules
+rm -r signalling-server/.cache
+rm -r signalling-server/dist

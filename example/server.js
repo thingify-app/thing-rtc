@@ -1,7 +1,7 @@
 'use strict';
 
 const express = require('express');
-const { ThingServer } = require('thingrtc-server');
+const { ThingServer } = require('thingrtc-signalling-server');
 
 const port = process.env.PORT || 8080;
 

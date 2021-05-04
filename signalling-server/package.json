@@ -1,5 +1,5 @@
 {
-  "name": "thingrtc-server",
+  "name": "thingrtc-signalling-server",
   "main": "dist/index.js",
   "bin": "cli.js",
   "scripts": {

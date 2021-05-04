@@ -16,7 +16,7 @@
     "dependencies": {
         "express": "^4.17.1",
         "thingrtc-peer": "file:../peer",
-        "thingrtc-server": "file:../server"
+        "thingrtc-signalling-server": "file:../signalling-server"
     },
     "browserslist": [
         "last 1 Chrome version"
