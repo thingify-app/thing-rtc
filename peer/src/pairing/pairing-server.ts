@@ -15,7 +15,7 @@ export class PairingServer {
     }
 
     async checkPairingStatus(pairingId: string): Promise<PairingStatus> {
-        return (await this.http.post<PairingStatus>(`/pairingStatus/${pairingId}`)).data;
+        return (await this.http.get<PairingStatus>(`/pairingStatus/${pairingId}`)).data;
     }
 
     async respondToPairingRequest(shortcode: string, initiatorPublicKey: string): Promise<InitiatorPairDetails> {

@@ -1,0 +1,9 @@
+body {
+    font-family: sans-serif;
+}
+
+.box {
+    border: 1px solid black;
+    padding: 8px;
+    margin: 8px;
+}

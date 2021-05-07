@@ -1,4 +1,5 @@
 import * as express from 'express';
+import * as cors from 'cors';
 import { PairingServer } from './pairing-server';
 import { InMemoryStorage } from './storage';
 
@@ -10,6 +11,7 @@ export class Server {
         const app = express();
 
         app.use(express.json());
+        app.use(cors());
     
         app.get('/', (req, res) => {
             res.send('ThingRTC Pairing Server');

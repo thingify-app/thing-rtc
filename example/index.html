@@ -2,29 +2,41 @@
 <html>
     <head>
         <title>ThingRTC</title>
+        <link rel="stylesheet" href="app.css"/>
     </head>
     <body>
-        <p>Role:</p>
-        <input type="radio" id="initiator" name="role" checked/>
-        <label for="initiator">Initiator</label>
-        <input type="radio" id="responder" name="role"/>
-        <label for="responder">Responder</label>
-        <p>Responder ID:</p>
-        <p><input type="text" id="responderId"/></p>
-        <p>Send video:</p>
-        <p><input type="checkbox" id="sendVideo"/></p>
-        <p><button id="connectButton">Connect</button></p>
-        <p><button id="disconnectButton">Disconnect</button></p>
-        <p>Message:</p>
-        <p>
-            <input type="text" id="message"/>
-            <button id="sendMessageButton">Send</button>
-        </p>
-        <p>Local video:</p>
-        <p><video id="localVideo" autoplay playsinline></video></p>
-        <p>Remote video:</p>
-        <p><video id="remoteVideo" autoplay playsinline></video></p>
-
+        <div class="box">
+            <h1>Create Pairing</h1>
+            <p>Role:</p>
+            <input type="radio" id="initiator" name="role" checked/>
+            <label for="initiator">Initiator</label>
+            <input type="radio" id="responder" name="role"/>
+            <label for="responder">Responder</label>
+            <div id="createPairingBox">
+                <button id="createPairingButton">Create pairing</button>
+                <div id="pairingShortcode"></div>
+            </div>
+            <div id="respondToPairingBox">
+                <input type="text" id="pairingShortcodeInput"/>
+                <button id="respondToPairingButton">Respond</button>
+            </div>
+            <div id="pairingStatus"></div>
+        </div>
+        <div class="box">
+            <p>Send video:</p>
+            <p><input type="checkbox" id="sendVideo"/></p>
+            <p><button id="connectButton">Connect</button></p>
+            <p><button id="disconnectButton">Disconnect</button></p>
+            <p>Message:</p>
+            <p>
+                <input type="text" id="message"/>
+                <button id="sendMessageButton">Send</button>
+            </p>
+            <p>Local video:</p>
+            <p><video id="localVideo" autoplay playsinline></video></p>
+            <p>Remote video:</p>
+            <p><video id="remoteVideo" autoplay playsinline></video></p>
+        </div>
         <script src="./app.ts"></script>
     </body>
 </html>

@@ -4,7 +4,7 @@
         "postinstall": "npm run build",
         "build": "parcel build index.html",
         "start": "node ./server.js",
-        "serve": "nodemon --ignore dist/ -e ts,html,js --exec npm-run-all build start"
+        "serve": "nodemon --ignore dist/ -e ts,html,js,css --exec npm-run-all build start"
     },
     "private": true,
     "devDependencies": {

@@ -1,8 +1,14 @@
-import { BasicTokenGenerator, ThingPeer } from 'thingrtc-peer';
+import { BasicTokenGenerator, ThingPeer, Pairing, PairingServer } from 'thingrtc-peer';
 
 const initiatorRadio = document.getElementById('initiator') as HTMLInputElement;
 const responderRadio = document.getElementById('responder') as HTMLInputElement;
-const responderIdText = document.getElementById('responderId') as HTMLInputElement;
+const createPairingBox = document.getElementById('createPairingBox') as HTMLDivElement;
+const respondToPairingBox = document.getElementById('respondToPairingBox') as HTMLDivElement;
+const createPairingButton = document.getElementById('createPairingButton') as HTMLButtonElement;
+const respondToPairingButton = document.getElementById('respondToPairingButton') as HTMLButtonElement;
+const pairingShortcodeInput = document.getElementById('pairingShortcodeInput') as HTMLInputElement;
+const pairingShortcodeBox = document.getElementById('pairingShortcode') as HTMLDivElement;
+const pairingStatusBox = document.getElementById('pairingStatus') as HTMLDivElement;
 const sendVideoCheckbox = document.getElementById('sendVideo') as HTMLInputElement;
 const connectButton = document.getElementById('connectButton') as HTMLButtonElement;
 const disconnectButton = document.getElementById('disconnectButton') as HTMLButtonElement;
@@ -15,6 +21,10 @@ const remoteMediaStream = new MediaStream();
 
 const protocol = location.protocol === 'http:' ? 'ws' : 'wss';
 const peer = new ThingPeer(`${protocol}://${location.host}/`);
+const pairingServerUrl = `${location.protocol}//${location.hostname}:8081/`;
+const pairingServer = new PairingServer(pairingServerUrl);
+const pairing = new Pairing(pairingServer);
+
 peer.on('connectionStateChanged', state => {
     console.log(`Peer connection state: ${state}`);
     if (state === 'disconnected') {
@@ -35,6 +45,64 @@ peer.on('mediaStream', track => {
 });
 
 disconnectButton.disabled = true;
+createPairingBox.style.display = 'none';
+respondToPairingBox.style.display = 'block';
+
+initiatorRadio.addEventListener('change', () => {
+    if (initiatorRadio.checked) {
+        createPairingBox.style.display = 'none';
+        respondToPairingBox.style.display = 'block';
+    }
+});
+
+responderRadio.addEventListener('change', () => {
+    if (responderRadio.checked) {
+        createPairingBox.style.display = 'block';
+        respondToPairingBox.style.display = 'none';
+    }
+});
+
+createPairingButton.addEventListener('click', async () => {
+    createPairingButton.disabled = true;
+    initiatorRadio.disabled = true;
+    responderRadio.disabled = true;
+
+    pairingStatusBox.innerText = 'Creating pairing...';
+    const pairingDetails = await pairing.initiatePairing();
+    pairingShortcodeBox.innerText = `Pairing code: ${pairingDetails.shortcode}`;
+    pairingStatusBox.innerText = 'Waiting for peer...';
+    try {
+        const redemptionResult = await pairing.pairingRedemptionResult(pairingDetails.pairingId);
+        pairingShortcodeBox.innerText = '';
+        pairingStatusBox.innerText = 'Pairing succeeded!';
+    } catch (error) {
+        pairingShortcodeBox.innerText = '';
+        pairingStatusBox.innerText = 'Pairing failed, try again.';
+    }
+    createPairingButton.disabled = false;
+    initiatorRadio.disabled = false;
+    responderRadio.disabled = false;
+});
+
+respondToPairingButton.addEventListener('click', async () => {
+    pairingShortcodeInput.disabled = true;
+    respondToPairingButton.disabled = true;
+    initiatorRadio.disabled = true;
+    responderRadio.disabled = true;
+
+    const shortcode = pairingShortcodeInput.value;
+    try {
+        const response = await pairing.respondToPairing(shortcode);
+        pairingStatusBox.innerText = 'Pairing succeeded!';
+    } catch (error) {
+        pairingStatusBox.innerText = 'Pairing failed, try again.';
+    }
+
+    pairingShortcodeInput.disabled = false;
+    respondToPairingButton.disabled = false;
+    initiatorRadio.disabled = false;
+    responderRadio.disabled = false;
+});
 
 connectButton.addEventListener('click', async () => {
     connectButton.disabled = true;
@@ -42,16 +110,15 @@ connectButton.addEventListener('click', async () => {
     sendVideoCheckbox.disabled = true;
     initiatorRadio.disabled = true;
     responderRadio.disabled = true;
-    responderIdText.disabled = true;
 
     const sendVideo = sendVideoCheckbox.checked;
     const cameraStream = sendVideo ? await getCamera() : null;
     localVideo.srcObject = cameraStream;
     const role = initiatorRadio.checked ? 'initiator' : 'responder';
-    const responderId = responderIdText.value;
+    const responderId = '';
     const tokenGenerator = new BasicTokenGenerator(role, responderId);
     const mediaStreams = cameraStream ? [cameraStream] : [];
-    peer.connect(role, responderIdText.value, tokenGenerator, mediaStreams);
+    peer.connect(role, responderId, tokenGenerator, mediaStreams);
 });
 
 disconnectButton.addEventListener('click', () => {
