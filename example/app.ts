@@ -9,6 +9,7 @@ const respondToPairingButton = document.getElementById('respondToPairingButton')
 const pairingShortcodeInput = document.getElementById('pairingShortcodeInput') as HTMLInputElement;
 const pairingShortcodeBox = document.getElementById('pairingShortcode') as HTMLDivElement;
 const pairingStatusBox = document.getElementById('pairingStatus') as HTMLDivElement;
+const pairingList = document.getElementById('pairingList') as HTMLDivElement;
 const sendVideoCheckbox = document.getElementById('sendVideo') as HTMLInputElement;
 const connectButton = document.getElementById('connectButton') as HTMLButtonElement;
 const disconnectButton = document.getElementById('disconnectButton') as HTMLButtonElement;
@@ -24,6 +25,8 @@ const peer = new ThingPeer(`${protocol}://${location.host}/`);
 const pairingServerUrl = `${location.protocol}//${location.hostname}:8081/`;
 const pairingServer = new PairingServer(pairingServerUrl);
 const pairing = new Pairing(pairingServer);
+
+refreshPairingList();
 
 peer.on('connectionStateChanged', state => {
     console.log(`Peer connection state: ${state}`);
@@ -72,16 +75,19 @@ createPairingButton.addEventListener('click', async () => {
     pairingShortcodeBox.innerText = `Pairing code: ${pairingDetails.shortcode}`;
     pairingStatusBox.innerText = 'Waiting for peer...';
     try {
-        const redemptionResult = await pairing.pairingRedemptionResult(pairingDetails.pairingId);
+        const redemptionResult = await pairingDetails.redemptionResult();
         pairingShortcodeBox.innerText = '';
         pairingStatusBox.innerText = 'Pairing succeeded!';
     } catch (error) {
+        console.error(error);
         pairingShortcodeBox.innerText = '';
         pairingStatusBox.innerText = 'Pairing failed, try again.';
     }
     createPairingButton.disabled = false;
     initiatorRadio.disabled = false;
     responderRadio.disabled = false;
+
+    await refreshPairingList();
 });
 
 respondToPairingButton.addEventListener('click', async () => {
@@ -95,6 +101,7 @@ respondToPairingButton.addEventListener('click', async () => {
         const response = await pairing.respondToPairing(shortcode);
         pairingStatusBox.innerText = 'Pairing succeeded!';
     } catch (error) {
+        console.error(error);
         pairingStatusBox.innerText = 'Pairing failed, try again.';
     }
 
@@ -102,6 +109,8 @@ respondToPairingButton.addEventListener('click', async () => {
     respondToPairingButton.disabled = false;
     initiatorRadio.disabled = false;
     responderRadio.disabled = false;
+
+    await refreshPairingList();
 });
 
 connectButton.addEventListener('click', async () => {
@@ -133,4 +142,9 @@ sendMessageButton.addEventListener('click', () => {
 
 async function getCamera(): Promise<MediaStream> {
     return await navigator.mediaDevices?.getUserMedia({video: true});
+}
+
+async function refreshPairingList(): Promise<void> {
+    const pairingIds = await pairing.getAllPairingIds();
+    pairingList.innerHTML = `<ul>${pairingIds.map(id => `<li>${id}</li>`)}</ul>`;
 }

@@ -1,4 +1,5 @@
 import { PairingServer, PairingStatus } from './pairing-server';
+import { PairingStorage } from './pairing-storage';
 
 const subtle = crypto.subtle;
 
@@ -32,49 +33,61 @@ async function sleep(millis: number): Promise<void> {
     });
 }
 
+async function importPublicKey(keyJson: string): Promise<CryptoKey> {
+    const algorithm = {
+        name: 'RSA-PSS',
+        hash: 'SHA-256'
+    };
+    return await subtle.importKey('jwk', JSON.parse(keyJson), algorithm, true, ['verify']);
+}
+
 export class Pairing {
 
     constructor(
         private pairingServer: PairingServer,
-        private sleeper: (millis: number) => Promise<void> = sleep
+        private pairingStorage: PairingStorage = new PairingStorage()
     ) {}
 
-    async initiatePairing(): Promise<PairingInitiation> {
+    async initiatePairing(): Promise<PendingPairing> {
         const keyPair = await this.generateKeyPair();
         const publicKey = JSON.stringify(await subtle.exportKey('jwk', keyPair.publicKey));
         const response = await this.pairingServer.createPairingRequest(publicKey);
-        return {
+
+        const initialData = {
             pairingId: response.pairingId,
             serverToken: response.responderToken,
             shortcode: response.shortcode,
-            localPublicKey: publicKey
+            localKeyPair: keyPair
         };
-    }
 
-    async pairingRedemptionResult(pairingId: string): Promise<PairingRedemptionResponse> {
-        let response: PairingStatus | null = null;
-        while (response?.status !== 'paired') {
-            response = await this.pairingServer.checkPairingStatus(pairingId);
-            await this.sleeper(1000);
-        }
-        if (!response.initiatorPublicKey) {
-            throw new Error('Missing public key in response.');
-        }
-        return {
-            remotePublicKey: response.initiatorPublicKey
-        };
+        return new PendingPairing(initialData, this.pairingServer, this.pairingStorage);
     }
 
     async respondToPairing(shortcode: string): Promise<PairingResponse> {
         const keyPair = await this.generateKeyPair();
         const publicKey = JSON.stringify(await subtle.exportKey('jwk', keyPair.publicKey));
         const peerDetails = await this.pairingServer.respondToPairingRequest(shortcode, publicKey);
+        const remotePublicKey = await importPublicKey(peerDetails.responderPublicKey);
+
+        await this.pairingStorage.savePairing({
+            pairingId: peerDetails.pairingId,
+            role: 'initiator',
+            serverToken: peerDetails.initiatorToken,
+            localKeyPair: keyPair,
+            remotePublicKey: remotePublicKey
+        });
+
         return {
             pairingId: peerDetails.pairingId,
             serverToken: peerDetails.initiatorToken,
             localPublicKey: publicKey,
             remotePublicKey: peerDetails.responderPublicKey
         }
+    }
+
+    async getAllPairingIds(): Promise<string[]> {
+        const pairings = await this.pairingStorage.getAllPairings();
+        return pairings.map(pairing => pairing.pairingId);
     }
 
     private async generateKeyPair(): Promise<CryptoKeyPair> {
@@ -88,11 +101,48 @@ export class Pairing {
     }
 }
 
+export class PendingPairing {
+    constructor(
+        private initialData: PairingInitiation,
+        private pairingServer: PairingServer,
+        private pairingStorage: PairingStorage,
+        private sleeper: (millis: number) => Promise<void> = sleep
+    ) {}
+
+    get shortcode(): string {
+        return this.initialData.shortcode;
+    }
+
+    async redemptionResult(): Promise<PairingRedemptionResponse> {
+        let response: PairingStatus | null = null;
+        while (response?.status !== 'paired') {
+            response = await this.pairingServer.checkPairingStatus(this.initialData.pairingId);
+            await this.sleeper(1000);
+        }
+        if (!response.initiatorPublicKey) {
+            throw new Error('Missing public key in response.');
+        }
+
+        const remotePublicKey = await importPublicKey(response.initiatorPublicKey);
+        await this.pairingStorage.savePairing({
+            pairingId: this.initialData.pairingId,
+            role: 'responder',
+            serverToken: this.initialData.serverToken,
+            localKeyPair: this.initialData.localKeyPair,
+            remotePublicKey: remotePublicKey
+        });
+
+        return {
+            remotePublicKey: response.initiatorPublicKey
+        };
+    }
+}
+
 export interface PairingInitiation {
     pairingId: string;
     shortcode: string;
     serverToken: string;
-    localPublicKey: string;
+    localKeyPair: CryptoKeyPair;
 }
 
 export interface PairingResponse {
