@@ -146,5 +146,5 @@ async function getCamera(): Promise<MediaStream> {
 
 async function refreshPairingList(): Promise<void> {
     const pairingIds = await pairing.getAllPairingIds();
-    pairingList.innerHTML = `<ul>${pairingIds.map(id => `<li>${id}</li>`)}</ul>`;
+    pairingList.innerHTML = `<ul>${pairingIds.map(id => `<li>${id}</li>`).join('')}</ul>`;
 }

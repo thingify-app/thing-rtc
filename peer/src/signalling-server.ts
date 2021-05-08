@@ -17,11 +17,11 @@ export class SignallingServer {
 
     constructor(private options: SignallingOptions) {}
 
-    connect(tokenGenerator: TokenGenerator): void {
+    connect(): void {
         this.state = 'connected';
         this.socket = new WebSocket(this.options.serverUrl);
-        this.socket.addEventListener('open', () => {
-            const token = tokenGenerator.generateToken();
+        this.socket.addEventListener('open', async () => {
+            const token = await this.options.tokenGenerator.generateToken();
             this.sendAuthMessage(token);
             // TODO: look into whether we need to await some kind of auth confirmation.
             this.flushQueue();
@@ -33,7 +33,7 @@ export class SignallingServer {
             console.log('Socket error.');
             this.retry.retry(() => {
                 this.socket?.close();
-                this.connect(tokenGenerator);
+                this.connect();
             });
         });
         this.socket.addEventListener('close', () => {
@@ -43,7 +43,7 @@ export class SignallingServer {
             if (this.state === 'connected') {
                 this.retry.retry(() => {
                     this.socket?.close();
-                    this.connect(tokenGenerator);
+                    this.connect();
                 });
             }
         });
@@ -164,6 +164,7 @@ export class SignallingServer {
 
 export interface SignallingOptions {
     serverUrl: string;
+    tokenGenerator: TokenGenerator;
 }
 
 /**

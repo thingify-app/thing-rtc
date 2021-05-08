@@ -12,8 +12,8 @@ export class ThingPeer {
     constructor(private serverUrl: string) {}
 
     connect(role: 'initiator' | 'responder', responderId: string, tokenGenerator: TokenGenerator, mediaStreams: MediaStream[]) {
-        const server = new SignallingServer({serverUrl: this.serverUrl});
-        this.peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server, tokenGenerator) : new ResponderPeerTasks(server, tokenGenerator);
+        const server = new SignallingServer({serverUrl: this.serverUrl, tokenGenerator});
+        this.peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server) : new ResponderPeerTasks(server);
         this.peerTasks.connectionStateListener = this.connectionStateListener;
         this.peerTasks.mediaStreamListener = this.mediaStreamListener;
         this.peerTasks.stringMessageListener = this.stringMessageListener;
@@ -95,8 +95,8 @@ abstract class BasePeerTasks implements PeerTasks {
     stringMessageListener?: (message: string) => void;
     binaryMessageListener?: (message: ArrayBuffer) => void;
 
-    constructor(protected server: SignallingServer, private tokenGenerator: TokenGenerator) {
-        this.server.connect(tokenGenerator);
+    constructor(protected server: SignallingServer) {
+        this.server.connect();
         this.server.on('peerConnect', () => this.onPeerConnect());
         this.server.on('iceCandidate', candidate => this.onIceCandidate(candidate));
         this.server.on('offer', offer => this.onOffer(offer));
@@ -177,7 +177,7 @@ abstract class BasePeerTasks implements PeerTasks {
                 // Disconnect from everything (server and RTC), reconnect to the signalling
                 // server, and start again.
                 this.disconnect();
-                this.server.connect(this.tokenGenerator);
+                this.server.connect();
             }
         });
 

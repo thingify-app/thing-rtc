@@ -1,4 +1,4 @@
-import { clear, createStore, del, set, values } from 'idb-keyval';
+import { clear, createStore, del, get, set, values } from 'idb-keyval';
 
 export class PairingStorage {
     private store = createStore('thing-rtc-pairing', 'pairings');
@@ -18,6 +18,10 @@ export class PairingStorage {
 
     async getAllPairings(): Promise<PairingData[]> {
         return await values(this.store);
+    }
+
+    async getPairing(pairingId: string): Promise<PairingData|undefined> {
+        return await get(pairingId, this.store);
     }
 
     async clearAllPairings(): Promise<void> {

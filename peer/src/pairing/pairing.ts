@@ -1,7 +1,8 @@
 import { PairingServer, PairingStatus } from './pairing-server';
 import { PairingStorage } from './pairing-storage';
-
-const subtle = crypto.subtle;
+import { exportPublicKey, generateKeyPair, importPublicKey } from './crypto';
+import { TokenGenerator } from '../token-generator';
+import { PairingTokenGenerator } from './pairing-token-generator';
 
 // API for creating a pairing request:
 // * generates its own keypair.
@@ -33,14 +34,6 @@ async function sleep(millis: number): Promise<void> {
     });
 }
 
-async function importPublicKey(keyJson: string): Promise<CryptoKey> {
-    const algorithm = {
-        name: 'RSA-PSS',
-        hash: 'SHA-256'
-    };
-    return await subtle.importKey('jwk', JSON.parse(keyJson), algorithm, true, ['verify']);
-}
-
 export class Pairing {
 
     constructor(
@@ -49,8 +42,8 @@ export class Pairing {
     ) {}
 
     async initiatePairing(): Promise<PendingPairing> {
-        const keyPair = await this.generateKeyPair();
-        const publicKey = JSON.stringify(await subtle.exportKey('jwk', keyPair.publicKey));
+        const keyPair = await generateKeyPair();
+        const publicKey = await exportPublicKey(keyPair.publicKey);
         const response = await this.pairingServer.createPairingRequest(publicKey);
 
         const initialData = {
@@ -64,8 +57,8 @@ export class Pairing {
     }
 
     async respondToPairing(shortcode: string): Promise<PairingResponse> {
-        const keyPair = await this.generateKeyPair();
-        const publicKey = JSON.stringify(await subtle.exportKey('jwk', keyPair.publicKey));
+        const keyPair = await generateKeyPair();
+        const publicKey = await exportPublicKey(keyPair.publicKey);
         const peerDetails = await this.pairingServer.respondToPairingRequest(shortcode, publicKey);
         const remotePublicKey = await importPublicKey(peerDetails.responderPublicKey);
 
@@ -90,14 +83,12 @@ export class Pairing {
         return pairings.map(pairing => pairing.pairingId);
     }
 
-    private async generateKeyPair(): Promise<CryptoKeyPair> {
-        return await subtle.generateKey({
-            name: 'RSA-PSS',
-            modulusLength: 4096,
-            // This is the default public exponent to use:
-            publicExponent: new Uint8Array([1, 0, 1]),
-            hash: 'SHA-256'
-        }, false, ['sign', 'verify']);
+    async getTokenGenerator(pairingId: string): Promise<TokenGenerator> {
+        const pairingData = await this.pairingStorage.getPairing(pairingId);
+        if (!pairingData) {
+            throw new Error(`Pairing ID '${pairingId}' not found!`);
+        }
+        return new PairingTokenGenerator(pairingData);
     }
 }
 
