@@ -14,14 +14,11 @@ export class ThingPeer {
     connect(tokenGenerator: TokenGenerator, mediaStreams: MediaStream[]) {
         const server = new SignallingServer({serverUrl: this.serverUrl, tokenGenerator});
         const role = tokenGenerator.getRole();
-        this.peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server) : new ResponderPeerTasks(server);
+        this.peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server, mediaStreams) : new ResponderPeerTasks(server, mediaStreams);
         this.peerTasks.connectionStateListener = this.connectionStateListener;
         this.peerTasks.mediaStreamListener = this.mediaStreamListener;
         this.peerTasks.stringMessageListener = this.stringMessageListener;
         this.peerTasks.binaryMessageListener = this.binaryMessageListener;
-        mediaStreams.forEach(stream => {
-            this.peerTasks!.addMediaStream(stream);
-        });
     }
 
     sendMessage(message: string|ArrayBuffer): void {
@@ -83,20 +80,18 @@ interface PeerTasks {
     onPeerDisconnect(): void;
 
     sendMessage(message: string|ArrayBuffer): void;
-    addMediaStream(mediaStream: MediaStream): void;
     disconnect(): void;
 }
 
 abstract class BasePeerTasks implements PeerTasks {
     protected peerConnection?: RTCPeerConnection;
     protected dataChannel?: RTCDataChannel;
-    private localMediaStream?: MediaStream;
     connectionStateListener?: (state: ConnectionState) => void;
     mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
     stringMessageListener?: (message: string) => void;
     binaryMessageListener?: (message: ArrayBuffer) => void;
 
-    constructor(protected server: SignallingServer) {
+    constructor(protected server: SignallingServer, private localMediaStreams: MediaStream[]) {
         this.server.connect();
         this.server.on('peerConnect', () => this.onPeerConnect());
         this.server.on('iceCandidate', candidate => this.onIceCandidate(candidate));
@@ -140,10 +135,6 @@ abstract class BasePeerTasks implements PeerTasks {
         this.dataChannel?.send(message);
     }
 
-    addMediaStream(mediaStream: MediaStream): void {
-        this.localMediaStream = mediaStream;
-    }
-
     disconnect(): void {
         this.server.disconnect();
         this.dataChannel?.close();
@@ -182,10 +173,12 @@ abstract class BasePeerTasks implements PeerTasks {
             }
         });
 
-        this.localMediaStream?.getTracks()?.forEach(track => {
-            console.log('Adding local track');
-            peerConnection.addTrack(track);
-        });
+        this.localMediaStreams?.forEach(mediaStream =>
+            mediaStream?.getTracks()?.forEach(track => {
+                console.log('Adding local track');
+                peerConnection.addTrack(track);
+            })
+        );
 
         peerConnection.addEventListener('track', event => {
             console.log('Remote track event received');
