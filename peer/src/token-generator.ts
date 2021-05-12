@@ -2,6 +2,8 @@ export interface TokenGenerator {
     /** Produces a token for authentication with the signalling server. */
     generateToken(): Promise<string>;
 
+    getRole(): Role;
+
     /** Signs each signalling message for verification by the peer. */
     signMessage(message: string): Promise<ArrayBuffer>;
 
@@ -23,6 +25,10 @@ export class BasicTokenGenerator implements TokenGenerator {
             expiry: Number.MAX_SAFE_INTEGER
         };
         return JSON.stringify(token);
+    }
+
+    getRole(): Role {
+        return this.role;
     }
 
     async signMessage(message: string): Promise<ArrayBuffer> {

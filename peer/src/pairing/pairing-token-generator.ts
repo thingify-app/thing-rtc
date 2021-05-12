@@ -1,4 +1,4 @@
-import { TokenGenerator } from "../token-generator";
+import { Role, TokenGenerator } from "../token-generator";
 import { PairingData } from "./pairing-storage";
 import { signMessage as sign, verifyMessage as verify } from './crypto';
 
@@ -8,6 +8,10 @@ export class PairingTokenGenerator implements TokenGenerator {
 
     async generateToken(): Promise<string> {
         return this.pairingData.serverToken;
+    }
+
+    getRole(): Role {
+        return this.pairingData.role;
     }
 
     async signMessage(message: string): Promise<ArrayBuffer> {

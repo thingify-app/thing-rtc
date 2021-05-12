@@ -11,8 +11,9 @@ export class ThingPeer {
 
     constructor(private serverUrl: string) {}
 
-    connect(role: 'initiator' | 'responder', responderId: string, tokenGenerator: TokenGenerator, mediaStreams: MediaStream[]) {
+    connect(tokenGenerator: TokenGenerator, mediaStreams: MediaStream[]) {
         const server = new SignallingServer({serverUrl: this.serverUrl, tokenGenerator});
+        const role = tokenGenerator.getRole();
         this.peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server) : new ResponderPeerTasks(server);
         this.peerTasks.connectionStateListener = this.connectionStateListener;
         this.peerTasks.mediaStreamListener = this.mediaStreamListener;

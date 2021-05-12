@@ -114,6 +114,11 @@ respondToPairingButton.addEventListener('click', async () => {
 });
 
 connectButton.addEventListener('click', async () => {
+    const pairingId = getSelectedPairingId();
+    if (!pairingId) {
+        return;
+    }
+
     connectButton.disabled = true;
     disconnectButton.disabled = false;
     sendVideoCheckbox.disabled = true;
@@ -123,16 +128,17 @@ connectButton.addEventListener('click', async () => {
     const sendVideo = sendVideoCheckbox.checked;
     const cameraStream = sendVideo ? await getCamera() : null;
     localVideo.srcObject = cameraStream;
-    const role = initiatorRadio.checked ? 'initiator' : 'responder';
-    const responderId = '';
-    const tokenGenerator = new BasicTokenGenerator(role, responderId);
+    const tokenGenerator = await pairing.getTokenGenerator(pairingId);
     const mediaStreams = cameraStream ? [cameraStream] : [];
-    peer.connect(role, responderId, tokenGenerator, mediaStreams);
+    peer.connect(tokenGenerator, mediaStreams);
 });
 
 disconnectButton.addEventListener('click', () => {
     connectButton.disabled = false;
     disconnectButton.disabled = true;
+    sendVideoCheckbox.disabled = false;
+    initiatorRadio.disabled = false;
+    responderRadio.disabled = false;
     peer.disconnect();
 });
 
@@ -146,5 +152,15 @@ async function getCamera(): Promise<MediaStream> {
 
 async function refreshPairingList(): Promise<void> {
     const pairingIds = await pairing.getAllPairingIds();
-    pairingList.innerHTML = `<ul>${pairingIds.map(id => `<li>${id}</li>`).join('')}</ul>`;
+    pairingList.innerHTML = pairingIds.map(id => `
+        <p>
+            <input type="radio" id="${id}" name="pairingId"/>
+            <label for="${id}">${id}</label>
+        </p>
+    `).join('');
+}
+
+function getSelectedPairingId(): string | null {
+    const selectedRadio = document.querySelector('input[name="pairingId"]:checked') as HTMLInputElement;
+    return selectedRadio?.id || null;
 }
