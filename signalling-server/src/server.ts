@@ -9,13 +9,13 @@ export class Server {
       this.connectionAuthMap.set(connection, {
         authed: false,
         role: null,
-        responderId: null
+        pairingId: null
       });
     }
   }
 
-  private getConnectionPair(responderId: string) {
-    const entry = this.responderConnectionMap.get(responderId);
+  private getConnectionPair(pairingId: string) {
+    const entry = this.responderConnectionMap.get(pairingId);
     if (entry) {
       return entry;
     } else {
@@ -23,22 +23,22 @@ export class Server {
         initiatorConnection: null,
         responderConnection: null
       };
-      this.responderConnectionMap.set(responderId, connectionPair);
+      this.responderConnectionMap.set(pairingId, connectionPair);
       return connectionPair;
     }
   }
 
   onAuthMessage(connection: Connection, message: AuthMessage) {
-    const responderId = message.responderId;
+    const pairingId = message.pairingId;
     const role = message.role;
 
     this.connectionAuthMap.set(connection, {
       authed: true,
-      responderId,
+      pairingId,
       role
     });
 
-    const connectionPair = this.getConnectionPair(responderId);
+    const connectionPair = this.getConnectionPair(pairingId);
     if ((role === 'initiator' && connectionPair.initiatorConnection) || (role === 'responder' && connectionPair.responderConnection)) {
       connection.disconnect();
       throw new Error('Role already connected.');
@@ -83,10 +83,10 @@ export class Server {
 
   private relayMessage(connection: Connection, message: string) {
     const authState = this.connectionAuthMap.get(connection);
-    const responderId = authState.responderId;
+    const pairingId = authState.pairingId;
     const role = authState.role;
 
-    const connectionPair = this.getConnectionPair(responderId);
+    const connectionPair = this.getConnectionPair(pairingId);
     let peer: Connection;
     if (role === 'initiator') {
       peer = connectionPair.responderConnection;
@@ -100,8 +100,8 @@ export class Server {
     const authState = this.connectionAuthMap.get(connection);
     this.connectionAuthMap.delete(connection);
     if (authState) {
-      if (authState.responderId) {
-        const connectionPair = this.getConnectionPair(authState.responderId);
+      if (authState.pairingId) {
+        const connectionPair = this.getConnectionPair(authState.pairingId);
         switch (authState.role) {
           case 'initiator':
             connectionPair.initiatorConnection = null;
@@ -113,7 +113,7 @@ export class Server {
         }
 
         if (connectionPair.initiatorConnection === null && connectionPair.responderConnection === null) {
-          this.responderConnectionMap.delete(authState.responderId);
+          this.responderConnectionMap.delete(authState.pairingId);
         }
       }
     }
@@ -139,11 +139,11 @@ interface ConnectionPair {
 interface AuthedData {
   authed: boolean;
   role: Role;
-  responderId: string;
+  pairingId: string;
 }
 
 export interface AuthMessage {
-  responderId: string;
+  pairingId: string;
   role: Role;
   expiry: number;
 }

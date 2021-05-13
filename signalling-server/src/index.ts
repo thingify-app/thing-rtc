@@ -1,14 +1,14 @@
 import * as WebSocket from 'ws';
-import { ParseThroughAuthValidator } from './auth-validator';
+import { JwtAuthValidator } from './auth-validator';
 import { MessageParser } from './message-parser';
 import { Connection, Server } from "./server";
 
 export class ThingServer {
     private server = new Server();
-    private authValidator = new ParseThroughAuthValidator();
+    private authValidator = new JwtAuthValidator(this.publicKey);
     private wss: WebSocket.Server;
 
-    constructor(existingServer: any = null, port: number = null) {
+    constructor(private publicKey: Buffer, existingServer: any = null, port: number = null) {
         this.wss = new WebSocket.Server({ server: existingServer, port });
         console.log('Listening...');
 

@@ -41,7 +41,7 @@ export interface MessageHandler {
 export type Role = 'initiator' | 'responder';
 
 export interface AuthMessage {
-    responderId: string;
+    pairingId: string;
     role: Role;
     expiry: number;
 }

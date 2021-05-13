@@ -1,3 +1,5 @@
+import * as jwt from 'jsonwebtoken';
+
 export interface AuthValidator {
     validateToken(token: string): ParsedToken;
 }
@@ -9,15 +11,28 @@ export class ParseThroughAuthValidator implements AuthValidator {
 }
 
 export class JwtAuthValidator implements AuthValidator {
+    constructor(private publicKey: Buffer) {}
+
     validateToken(token: string): ParsedToken {
-        throw new Error('Method not implemented.');
+        const parsedToken = jwt.verify(token, this.publicKey, {}) as JwtToken;
+        return {
+            pairingId: parsedToken.pairingId,
+            role: parsedToken.role,
+            expiry: Number.MAX_SAFE_INTEGER
+        };
     }
 }
 
 export type Role = 'initiator' | 'responder';
 
 export interface ParsedToken {
-    responderId: string;
+    pairingId: string;
     role: Role;
     expiry: number;
+}
+
+interface JwtToken {
+    pairingId: string;
+    role: Role;
+    iat: number;
 }

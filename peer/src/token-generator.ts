@@ -16,12 +16,12 @@ export interface TokenGenerator {
 
 /** Initial plain token generation without any signing, just to get started. */
 export class BasicTokenGenerator implements TokenGenerator {
-    constructor(private role: Role, private responderId: string) {}
+    constructor(private role: Role, private pairingId: string) {}
 
     async generateToken(): Promise<string> {
         const token = {
             role: this.role,
-            responderId: this.responderId,
+            pairingId: this.pairingId,
             expiry: Number.MAX_SAFE_INTEGER
         };
         return JSON.stringify(token);

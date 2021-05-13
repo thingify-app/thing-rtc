@@ -20,7 +20,7 @@ describe('MessageParser', function() {
     };
     authValidator = {
       validateToken: () => ({
-        responderId: 'abc',
+        pairingId: 'abc',
         role: 'initiator',
         expiry: 0
       })
@@ -35,7 +35,7 @@ describe('MessageParser', function() {
 
   it('calls the correct handler for an auth message', function() {
     messageParser.parseMessage('{"type": "auth", "data": "abc"}');
-    assert.calledWithExactly(handleAuthMessage, { responderId: 'abc', role: 'initiator', expiry: 0 });
+    assert.calledWithExactly(handleAuthMessage, { pairingId: 'abc', role: 'initiator', expiry: 0 });
   });
 
   it('throws error on invalid JSON', function() {

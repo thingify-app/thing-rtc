@@ -36,45 +36,45 @@ describe('server', function() {
   
   it('succeeds silently on receiving valid auth message', function() {
     server.onConnection(connection);
-    server.onAuthMessage(connection, {role: 'initiator', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(connection, {role: 'initiator', pairingId: 'abc', expiry: 0});
   });
 
-  it('throws error if role/responderId pair is already connected', function() {
+  it('throws error if role/pairingId pair is already connected', function() {
     server.onConnection(connection);
-    server.onAuthMessage(connection, {role: 'initiator', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(connection, {role: 'initiator', pairingId: 'abc', expiry: 0});
     const newConnection: Connection = {
       sendMessage: sendMessageCallback,
       disconnect: disconnectCallback
     };
     server.onConnection(newConnection);
-    expect(() => server.onAuthMessage(newConnection, {role: 'initiator', responderId: 'abc', expiry: 0})).to.throw('Role already connected.');
+    expect(() => server.onAuthMessage(newConnection, {role: 'initiator', pairingId: 'abc', expiry: 0})).to.throw('Role already connected.');
   });
   
-  it('succeeds silently if responderId is unique for a given role', function() {
+  it('succeeds silently if pairingId is unique for a given role', function() {
     server.onConnection(connection);
-    server.onAuthMessage(connection, {role: 'initiator', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(connection, {role: 'initiator', pairingId: 'abc', expiry: 0});
     const newConnection: Connection = {
       sendMessage: sendMessageCallback,
       disconnect: disconnectCallback
     };
     server.onConnection(newConnection);
-    server.onAuthMessage(newConnection, {role: 'initiator', responderId: 'def', expiry: 0});
+    server.onAuthMessage(newConnection, {role: 'initiator', pairingId: 'def', expiry: 0});
   });
 
-  it('succeeds silently if role is unique for given responderId', function() {
+  it('succeeds silently if role is unique for given pairingId', function() {
     server.onConnection(connection);
-    server.onAuthMessage(connection, {role: 'initiator', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(connection, {role: 'initiator', pairingId: 'abc', expiry: 0});
     const newConnection: Connection = {
       sendMessage: sendMessageCallback,
       disconnect: disconnectCallback
     };
     server.onConnection(newConnection);
-    server.onAuthMessage(newConnection, {role: 'responder', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(newConnection, {role: 'responder', pairingId: 'abc', expiry: 0});
   });
   
   it('sends peerConnect message to opposite peer', function () {
     server.onConnection(connection);
-    server.onAuthMessage(connection, {role: 'initiator', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(connection, {role: 'initiator', pairingId: 'abc', expiry: 0});
     const responderSendMessageCallback = fake();
     const responderDisconnectCallback = fake();
     const responderConnection: Connection = {
@@ -82,7 +82,7 @@ describe('server', function() {
       disconnect: responderDisconnectCallback
     };
     server.onConnection(responderConnection);
-    server.onAuthMessage(responderConnection, {role: 'responder', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(responderConnection, {role: 'responder', pairingId: 'abc', expiry: 0});
 
     assert.calledOnceWithExactly(sendMessageCallback, '{"type":"peerConnect"}');
     assert.calledOnceWithExactly(responderSendMessageCallback, '{"type":"peerConnect"}');
@@ -90,14 +90,14 @@ describe('server', function() {
 
   it('sends peerDisconnect message to initiator', function () {
     server.onConnection(connection);
-    server.onAuthMessage(connection, {role: 'initiator', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(connection, {role: 'initiator', pairingId: 'abc', expiry: 0});
 
     const responderConnection: Connection = {
       sendMessage: fake(),
       disconnect: fake()
     };
     server.onConnection(responderConnection);
-    server.onAuthMessage(responderConnection, {role: 'responder', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(responderConnection, {role: 'responder', pairingId: 'abc', expiry: 0});
 
     server.onDisconnection(responderConnection);
 
@@ -106,14 +106,14 @@ describe('server', function() {
   
   it('sends peerDisconnect message to responder', function () {
     server.onConnection(connection);
-    server.onAuthMessage(connection, {role: 'responder', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(connection, {role: 'responder', pairingId: 'abc', expiry: 0});
 
     const initiatorConnection: Connection = {
       sendMessage: fake(),
       disconnect: fake()
     };
     server.onConnection(initiatorConnection);
-    server.onAuthMessage(initiatorConnection, {role: 'initiator', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(initiatorConnection, {role: 'initiator', pairingId: 'abc', expiry: 0});
 
     server.onDisconnection(initiatorConnection);
 
@@ -122,7 +122,7 @@ describe('server', function() {
 
   it('relays message from initiator to responder', function() {
     server.onConnection(connection);
-    server.onAuthMessage(connection, {role: 'initiator', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(connection, {role: 'initiator', pairingId: 'abc', expiry: 0});
     const responderSendMessageCallback = fake();
     const responderDisconnectCallback = fake();
     const responderConnection: Connection = {
@@ -130,7 +130,7 @@ describe('server', function() {
       disconnect: responderDisconnectCallback
     };
     server.onConnection(responderConnection);
-    server.onAuthMessage(responderConnection, {role: 'responder', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(responderConnection, {role: 'responder', pairingId: 'abc', expiry: 0});
 
     server.onContentMessage(connection, 'hello world');
 
@@ -139,7 +139,7 @@ describe('server', function() {
 
   it('relays message from responder to initiator', function() {
     server.onConnection(connection);
-    server.onAuthMessage(connection, {role: 'responder', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(connection, {role: 'responder', pairingId: 'abc', expiry: 0});
     const initiatorSendMessageCallback = fake();
     const initiatorDisconnectCallback = fake();
     const initiatorConnection: Connection = {
@@ -147,7 +147,7 @@ describe('server', function() {
       disconnect: initiatorDisconnectCallback
     };
     server.onConnection(initiatorConnection);
-    server.onAuthMessage(initiatorConnection, {role: 'initiator', responderId: 'abc', expiry: 0});
+    server.onAuthMessage(initiatorConnection, {role: 'initiator', pairingId: 'abc', expiry: 0});
 
     server.onContentMessage(connection, 'hello world');
 
