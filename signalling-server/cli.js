@@ -1,4 +1,4 @@
 #!/usr/bin/env node
 
 const server = require('./dist/index');
-new server.ThingServer(null, 8080);
+new server.WebSocketServer(null, 8080);

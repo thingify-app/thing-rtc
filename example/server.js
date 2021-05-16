@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const express = require('express');
-const { ThingServer } = require('thingrtc-signalling-server');
+const { WebSocketServer } = require('thingrtc-signalling-server');
 const { Server } = require('thingrtc-pairing-server');
 
 const publicKey = fs.readFileSync('publicKey.pem');
@@ -14,5 +14,5 @@ const server = express()
     .use(express.static('dist'))
     .listen(port, '0.0.0.0', () => console.log(`Listening on ${port}`));
 
-new ThingServer(publicKey, server);
+new WebSocketServer(publicKey, server);
 new Server(privateKey, 8081);
