@@ -25,7 +25,7 @@ describe('MessageParser', function() {
         expiry: 0
       })
     };
-    messageParser = new MessageParser(authValidator, messageHandler);
+    messageParser = new MessageParser(messageHandler);
   });
 
   it('calls the correct handler for a content message', function() {
@@ -35,7 +35,7 @@ describe('MessageParser', function() {
 
   it('calls the correct handler for an auth message', function() {
     messageParser.parseMessage('{"type": "auth", "data": "abc"}');
-    assert.calledWithExactly(handleAuthMessage, { pairingId: 'abc', role: 'initiator', expiry: 0 });
+    assert.calledWithExactly(handleAuthMessage, 'abc');
   });
 
   it('throws error on invalid JSON', function() {
@@ -44,9 +44,5 @@ describe('MessageParser', function() {
 
   it('throws error on unknown type', function() {
     expect(() => messageParser.parseMessage('{"type": "hello"}')).to.throw('Unknown type.');
-  });
-
-  it('throws error on invalid auth message', function() {
-    expect(() => messageParser.parseMessage('{"type": "auth", "foo": "bar"}')).to.throw('Invalid auth message.');
   });
 });

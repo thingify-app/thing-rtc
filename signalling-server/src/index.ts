@@ -4,8 +4,8 @@ import { MessageParser } from './message-parser';
 import { Connection, Server } from "./server";
 
 export class ThingServer {
-    private server = new Server();
     private authValidator = new JwtAuthValidator(this.publicKey);
+    private server = new Server(this.authValidator);
     private wss: WebSocket.Server;
 
     constructor(private publicKey: Buffer, existingServer: any = null, port: number = null) {
@@ -28,7 +28,7 @@ export class ThingServer {
         
             ws.on('message', data => {
                 console.log(`Message received: ${data}`);
-                const messageParser = new MessageParser(this.authValidator, {
+                const messageParser = new MessageParser({
                     handleAuthMessage: message => this.server.onAuthMessage(connection, message),
                     handleContentMessage: message => this.server.onContentMessage(connection, message)
                 });

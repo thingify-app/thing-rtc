@@ -1,6 +1,10 @@
+import { AuthValidator } from "./auth-validator";
+
 export class Server {
   private connectionAuthMap = new Map<Connection, AuthedData>();
   private responderConnectionMap = new Map<string, ConnectionPair>();
+
+  constructor(private authValidator: AuthValidator) {}
 
   onConnection(connection: Connection) {
     if (this.connectionAuthMap.has(connection)) {
@@ -28,9 +32,10 @@ export class Server {
     }
   }
 
-  onAuthMessage(connection: Connection, message: AuthMessage) {
-    const pairingId = message.pairingId;
-    const role = message.role;
+  onAuthMessage(connection: Connection, token: string) {
+    const parsedToken = this.authValidator.validateToken(token);
+    const pairingId = parsedToken.pairingId;
+    const role = parsedToken.role;
 
     this.connectionAuthMap.set(connection, {
       authed: true,
