@@ -31,22 +31,23 @@ export class SignallingServer {
         });
         this.socket.addEventListener('error', () => {
             console.log('Socket error.');
+            this.retryConnect();
+        });
+        this.socket.addEventListener('close', () => {
+            console.log('Socket close.');
+            this.retryConnect();
+        });
+    }
+
+    private retryConnect() {
+        // Only retry if we are still actively trying to maintain a connection,
+        // otherwise ourselves disconnecting will endlessly trigger this.
+        if (this.state === 'connected') {
             this.retry.retry(() => {
                 this.socket?.close();
                 this.connect();
             });
-        });
-        this.socket.addEventListener('close', () => {
-            console.log('Socket close.');
-            // Only retry if we are still actively trying to maintain a connection,
-            // otherwise ourselves disconnecting will endlessly trigger this.
-            if (this.state === 'connected') {
-                this.retry.retry(() => {
-                    this.socket?.close();
-                    this.connect();
-                });
-            }
-        });
+        }
     }
 
     private sendAuthMessage(token: string) {
