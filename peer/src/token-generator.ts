@@ -4,14 +4,17 @@ export interface TokenGenerator {
 
     getRole(): Role;
 
-    /** Signs each signalling message for verification by the peer. */
-    signMessage(message: string): Promise<ArrayBuffer>;
+    /**
+     * Signs each signalling message for verification by the peer.
+     * Returns a base64-encoded string signature.
+     */
+    signMessage(message: string): Promise<string>;
 
     /**
      * Verifies a signalling message signature received by the peer.
      * The signature must be base64-encoded.
      */
-    verifyMessage(signature: string, message: string): Promise<boolean>;
+    verifyMessage(base64Signature: string, message: string): Promise<boolean>;
 }
 
 /** Initial plain token generation without any signing, just to get started. */
@@ -31,11 +34,11 @@ export class BasicTokenGenerator implements TokenGenerator {
         return this.role;
     }
 
-    async signMessage(message: string): Promise<ArrayBuffer> {
-        return new ArrayBuffer(0);
+    async signMessage(message: string): Promise<string> {
+        return '';
     }
 
-    async verifyMessage(signature: string, message: string): Promise<boolean> {
+    async verifyMessage(base64Signature: string, message: string): Promise<boolean> {
         return true;
     }
 }

@@ -37,11 +37,10 @@ export async function signMessage(privateKey: CryptoKey, message: string): Promi
     }, privateKey, buffer);
 }
 
-export async function verifyMessage(publicKey: CryptoKey, signature: string, message: string): Promise<boolean> {
-    const signatureBuffer = textEncoder.encode(signature);
+export async function verifyMessage(publicKey: CryptoKey, signature: ArrayBuffer, message: string): Promise<boolean> {
     const messageBuffer = textEncoder.encode(message);
     return await subtle.verify({
         name: 'RSA-PSS',
         saltLength: 32
-    }, publicKey, signatureBuffer, messageBuffer);
+    }, publicKey, signature, messageBuffer);
 }

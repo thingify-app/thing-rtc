@@ -60,10 +60,19 @@ export class SignallingServer {
         }
     }
 
-    private handleMessage(message: any): void {
+    private async handleMessage(message: any): Promise<void> {
         if (message && typeof(message) === 'string') {
             const json = JSON.parse(message);
             if (json && json.type) {
+                if (json.data) {
+                    if (!json.signature) {
+                        throw new Error('Signature missing from received message.');
+                    }
+                    const verified = await this.options.tokenGenerator.verifyMessage(json.signature, json.data);
+                    if (!verified) {
+                        throw new Error('Signature did not match message.');
+                    }
+                }
                 const data = json.data ? JSON.parse(json.data) : null;
                 switch (json.type) {
                     case 'peerConnect':
@@ -141,12 +150,16 @@ export class SignallingServer {
         }
     }
 
-    private sendMessage(type: string, data: any): void {
+    private async sendMessage(type: string, data: any): Promise<void> {
         // Two levels of stringify, so that data can be parsed independently
         // after type is parsed.
+        const stringData = typeof(data) === 'string' ? data : JSON.stringify(data);
+        const signature = await this.options.tokenGenerator.signMessage(stringData);
+
         this.socket?.send(JSON.stringify({
             type: type,
-            data: typeof(data) === 'string' ? data : JSON.stringify(data)
+            signature: signature,
+            data: stringData
         }));
     }
 
