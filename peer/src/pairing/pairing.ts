@@ -80,7 +80,7 @@ export class Pairing {
 
     async getAllPairingIds(): Promise<string[]> {
         const pairings = await this.pairingStorage.getAllPairings();
-        return pairings.map(pairing => pairing.pairingId);
+        return pairings.map(pairing => pairing[0]);
     }
 
     async getTokenGenerator(pairingId: string): Promise<TokenGenerator> {
@@ -89,6 +89,10 @@ export class Pairing {
             throw new Error(`Pairing ID '${pairingId}' not found!`);
         }
         return new PairingTokenGenerator(pairingData);
+    }
+
+    async clearAllPairings(): Promise<void> {
+        await this.pairingStorage.clearAllPairings();
     }
 }
 

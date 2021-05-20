@@ -10,6 +10,7 @@ const pairingShortcodeInput = document.getElementById('pairingShortcodeInput') a
 const pairingShortcodeBox = document.getElementById('pairingShortcode') as HTMLDivElement;
 const pairingStatusBox = document.getElementById('pairingStatus') as HTMLDivElement;
 const pairingList = document.getElementById('pairingList') as HTMLDivElement;
+const clearPairingsButton = document.getElementById('clearPairings') as HTMLDivElement;
 const sendVideoCheckbox = document.getElementById('sendVideo') as HTMLInputElement;
 const connectButton = document.getElementById('connectButton') as HTMLButtonElement;
 const disconnectButton = document.getElementById('disconnectButton') as HTMLButtonElement;
@@ -110,6 +111,11 @@ respondToPairingButton.addEventListener('click', async () => {
     initiatorRadio.disabled = false;
     responderRadio.disabled = false;
 
+    await refreshPairingList();
+});
+
+clearPairingsButton.addEventListener('click', async () => {
+    await pairing.clearAllPairings();
     await refreshPairingList();
 });
 
