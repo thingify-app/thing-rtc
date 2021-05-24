@@ -1,3 +1,4 @@
+import { generateNonce } from "./nonce-generator";
 import { ConstantRetry, Retry } from "./retry";
 import { TokenGenerator } from "./token-generator";
 
@@ -6,7 +7,9 @@ export class SignallingServer {
     private socket?: WebSocket;
     private state: State = 'disconnected';
     private retry: Retry = new ConstantRetry();
-    private messageQueue: {type: string, data: any}[] = [];
+    private messageQueue: {type: string, data: object}[] = [];
+    private localNonce?: string;
+    private remoteNonce?: string;
 
     private peerConnectListener?: () => void;
     private iceCandidateListener?: (candidate: RTCIceCandidate) => void;
@@ -15,13 +18,17 @@ export class SignallingServer {
     private peerDisconnectListener?: () => void;
     private errorListener?: () => void;
 
-    constructor(private options: SignallingOptions) {}
+    constructor(
+        private serverUrl: string,
+        private tokenGenerator: TokenGenerator,
+        private nonceGenerator: () => string = generateNonce
+    ) {}
 
     connect(): void {
         this.state = 'connected';
-        this.socket = new WebSocket(this.options.serverUrl);
+        this.socket = new WebSocket(this.serverUrl);
         this.socket.addEventListener('open', async () => {
-            const token = await this.options.tokenGenerator.generateToken();
+            const token = await this.tokenGenerator.generateToken();
             this.sendAuthMessage(token);
             // TODO: look into whether we need to await some kind of auth confirmation.
             this.flushQueue();
@@ -51,13 +58,18 @@ export class SignallingServer {
     }
 
     private sendAuthMessage(token: string) {
-        this.sendMessage('auth', token);
+        this.localNonce = this.nonceGenerator();
+        const message = {
+            nonce: this.localNonce,
+            token
+        };
+        this.sendMessage('auth', message, false);
     }
 
     private flushQueue(): void {
         while (this.messageQueue.length > 0) {
             const message = this.messageQueue.shift()!;
-            this.sendMessage(message.type, message.data);
+            this.sendMessage(message.type, message.data, true);
         }
     }
 
@@ -65,18 +77,27 @@ export class SignallingServer {
         if (message && typeof(message) === 'string') {
             const json = JSON.parse(message);
             if (json && json.type) {
+                let data = null;
                 if (json.data) {
+                    data = JSON.parse(json.data);
+                    if (this.localNonce !== data.nonce) {
+                        throw new Error('Nonce did not match expected value.');
+                    }
                     if (!json.signature) {
                         throw new Error('Signature missing from received message.');
                     }
-                    const verified = await this.options.tokenGenerator.verifyMessage(json.signature, json.data);
+                    const verified = await this.tokenGenerator.verifyMessage(json.signature, json.data);
                     if (!verified) {
                         throw new Error('Signature did not match message.');
                     }
+                    delete data.nonce;
                 }
-                const data = json.data ? JSON.parse(json.data) : null;
                 switch (json.type) {
                     case 'peerConnect':
+                        if (!json.nonce) {
+                            throw new Error('Nonce missing from peerConnect message.');
+                        }
+                        this.remoteNonce = json.nonce;
                         this.peerConnectListener?.();
                         break;
                     case 'iceCandidate':
@@ -136,26 +157,47 @@ export class SignallingServer {
     }
 
     sendOffer(offer: RTCSessionDescriptionInit): void {
-        this.queueMessage('offer', offer);
+        // The type and sdp properties are actually accessors, so we pull them
+        // out into plain properties here (spread fails on accessors).
+        this.queueMessage('offer', {
+            type: offer.type,
+            sdp: offer.sdp
+        });
     }
 
     sendAnswer(answer: RTCSessionDescriptionInit): void {
-        this.queueMessage('answer', answer);
+        // The type and sdp properties are actually accessors, so we pull them
+        // out into plain properties here (spread fails on accessors).
+        this.queueMessage('answer', {
+            type: answer.type,
+            sdp: answer.sdp
+        });
     }
 
-    private queueMessage(type: string, data: any): void {
+    private queueMessage(type: string, data: object): void {
         if (this.isConnected()) {
-            this.sendMessage(type, data);
+            this.sendMessage(type, data, true);
         } else {
             this.messageQueue.push({type, data});
         }
     }
 
-    private async sendMessage(type: string, data: any): Promise<void> {
-        // Two levels of stringify, so that data can be parsed independently
-        // after type is parsed.
-        const stringData = typeof(data) === 'string' ? data : JSON.stringify(data);
-        const signature = await this.options.tokenGenerator.signMessage(stringData);
+    private async sendMessage(type: string, data: object, sign: boolean): Promise<void> {
+        let signature = undefined;
+        let stringData: string;
+
+        if (sign) {            
+            const dataWithNonce = {
+                ...data,
+                nonce: this.remoteNonce
+            };
+            // Two levels of stringify, so that data can be parsed independently
+            // after type is parsed.
+            stringData = JSON.stringify(dataWithNonce);
+            signature = await this.tokenGenerator.signMessage(stringData);
+        } else {
+            stringData = JSON.stringify(data);
+        }
 
         this.socket?.send(JSON.stringify({
             type: type,
@@ -174,11 +216,6 @@ export class SignallingServer {
         this.socket = undefined;
         this.messageQueue = [];
     }
-}
-
-export interface SignallingOptions {
-    serverUrl: string;
-    tokenGenerator: TokenGenerator;
 }
 
 /**

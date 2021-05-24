@@ -1,4 +1,5 @@
 import { AuthValidator } from "./auth-validator";
+import { AuthMessage } from "./message-parser";
 
 export class Server {
   private connectionAuthMap = new Map<Connection, AuthedData>();
@@ -13,7 +14,8 @@ export class Server {
       this.connectionAuthMap.set(connection, {
         authed: false,
         role: null,
-        pairingId: null
+        pairingId: null,
+        nonce: null
       });
     }
   }
@@ -32,15 +34,16 @@ export class Server {
     }
   }
 
-  onAuthMessage(connection: Connection, token: string) {
-    const parsedToken = this.authValidator.validateToken(token);
+  onAuthMessage(connection: Connection, message: AuthMessage) {
+    const parsedToken = this.authValidator.validateToken(message.token);
     const pairingId = parsedToken.pairingId;
     const role = parsedToken.role;
 
     this.connectionAuthMap.set(connection, {
       authed: true,
       pairingId,
-      role
+      role,
+      nonce: message.nonce
     });
 
     const connectionPair = this.getConnectionPair(pairingId);
@@ -63,11 +66,18 @@ export class Server {
   }
 
   private sendPeerConnectMessage(connectionPair: ConnectionPair) {
-    const message = JSON.stringify({
-      type: 'peerConnect'
-    });
-    connectionPair.initiatorConnection.sendMessage(message);
-    connectionPair.responderConnection.sendMessage(message);
+    const initiatorAuthData = this.connectionAuthMap.get(connectionPair.initiatorConnection);
+    const responderAuthData = this.connectionAuthMap.get(connectionPair.responderConnection);
+
+    // Send each nonce to the other peer for them to include in signed messages.
+    connectionPair.initiatorConnection.sendMessage(JSON.stringify({
+      type: 'peerConnect',
+      nonce: responderAuthData.nonce
+    }));
+    connectionPair.responderConnection.sendMessage(JSON.stringify({
+      type: 'peerConnect',
+      nonce: initiatorAuthData.nonce
+    }));
   }
 
   onContentMessage(connection: Connection, message: string) {
@@ -145,12 +155,7 @@ interface AuthedData {
   authed: boolean;
   role: Role;
   pairingId: string;
-}
-
-export interface AuthMessage {
-  pairingId: string;
-  role: Role;
-  expiry: number;
+  nonce: string;
 }
 
 export interface Connection {

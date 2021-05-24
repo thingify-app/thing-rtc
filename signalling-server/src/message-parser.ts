@@ -10,7 +10,7 @@ export class MessageParser {
         const type = json.type;
         switch (type) {
             case 'auth':
-                this.messageHandler.handleAuthMessage(json.data);
+                this.handleAuthMessage(json.data);
                 break;
             case 'offer':
             case 'answer':
@@ -21,14 +21,28 @@ export class MessageParser {
                 throw new Error('Unknown type.');
         }
     }
+
+    private handleAuthMessage(json: string) {
+        const data = JSON.parse(json);
+        if (data.token && data.nonce) {
+            this.messageHandler.handleAuthMessage(data);
+        } else {
+            throw new Error(`Invalid auth message: ${json}`);
+        }
+    }
 }
 
 export interface MessageHandler {
-    handleAuthMessage(token: string): void;
+    handleAuthMessage(authMessage: AuthMessage): void;
     handleContentMessage(contentMessage: string): void;
 }
 
 export type Role = 'initiator' | 'responder';
+
+export interface AuthMessage {
+    nonce: string;
+    token: string;
+}
 
 export interface ContentMessage {
     content: string;

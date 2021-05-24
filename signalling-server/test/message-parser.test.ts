@@ -34,8 +34,18 @@ describe('MessageParser', function() {
   });
 
   it('calls the correct handler for an auth message', function() {
-    messageParser.parseMessage('{"type": "auth", "data": "abc"}');
-    assert.calledWithExactly(handleAuthMessage, 'abc');
+    messageParser.parseMessage('{"type": "auth", "data": "{\\"token\\":\\"abc\\", \\"nonce\\":\\"a\\"}"}');
+    assert.calledWithExactly(handleAuthMessage, {token: 'abc', nonce: 'a'});
+  });
+
+  it('throws on missing auth token', function() {
+    const authMessage = '{"type": "auth", "data": "{\\"nonce\\":\\"a\\"}"}';
+    expect(() => messageParser.parseMessage(authMessage)).to.throw('Invalid auth message: {"nonce":"a"}');
+  });
+
+  it('throws on missing auth nonce', function() {
+    const authMessage = '{"type": "auth", "data": "{\\"token\\":\\"abc\\"}"}';
+    expect(() => messageParser.parseMessage(authMessage)).to.throw('Invalid auth message: {"token":"abc"}');
   });
 
   it('throws error on invalid JSON', function() {
