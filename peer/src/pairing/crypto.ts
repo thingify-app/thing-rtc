@@ -6,8 +6,8 @@ const textEncoder = new TextEncoder();
  */
 export async function importPublicKey(jwk: string): Promise<CryptoKey> {
     const algorithm = {
-        name: 'RSA-PSS',
-        hash: 'SHA-256'
+        name: 'ECDSA',
+        namedCurve: 'P-256'
     };
     return await subtle.importKey('jwk', JSON.parse(jwk), algorithm, true, ['verify']);
 }
@@ -21,26 +21,23 @@ export async function exportPublicKey(key: CryptoKey): Promise<string> {
 
 export async function generateKeyPair(): Promise<CryptoKeyPair> {
     return await subtle.generateKey({
-        name: 'RSA-PSS',
-        modulusLength: 4096,
-        // This is the default public exponent to use:
-        publicExponent: new Uint8Array([1, 0, 1]),
-        hash: 'SHA-256'
+        name: 'ECDSA',
+        namedCurve: 'P-256'
     }, false, ['sign', 'verify']);
 }
 
 export async function signMessage(privateKey: CryptoKey, message: string): Promise<ArrayBuffer> {
     const buffer = textEncoder.encode(message);
     return await subtle.sign({
-        name: 'RSA-PSS',
-        saltLength: 32
+        name: 'ECDSA',
+        hash: 'SHA-256'
     }, privateKey, buffer);
 }
 
 export async function verifyMessage(publicKey: CryptoKey, signature: ArrayBuffer, message: string): Promise<boolean> {
     const messageBuffer = textEncoder.encode(message);
     return await subtle.verify({
-        name: 'RSA-PSS',
-        saltLength: 32
+        name: 'ECDSA',
+        hash: 'SHA-256'
     }, publicKey, signature, messageBuffer);
 }
