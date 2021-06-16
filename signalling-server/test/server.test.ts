@@ -1,8 +1,11 @@
 import { Connection, Server } from "../src/server";
-import { expect } from 'chai';
+import { expect, use } from 'chai';
+import * as chaiAsPromised from 'chai-as-promised';
 import { assert, fake, SinonSpy } from 'sinon';
 import 'mocha';
 import { ParseThroughAuthValidator } from "../src/auth-validator";
+
+use(chaiAsPromised);
 
 describe('server', function() {
   let server: Server;
@@ -36,31 +39,31 @@ describe('server', function() {
     server.onConnection(connection);
   });
   
-  it('succeeds silently on receiving valid auth message', function() {
+  it('succeeds silently on receiving valid auth message', async function() {
     server.onConnection(connection);
 
     const token = JSON.stringify({role: 'initiator', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(connection, {token, nonce: 'a'});
+    await server.onAuthMessage(connection, {token, nonce: 'a'});
   });
 
-  it('throws error if role/pairingId pair is already connected', function() {
+  it('throws error if role/pairingId pair is already connected', async function() {
     server.onConnection(connection);
 
     const token = JSON.stringify({role: 'initiator', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(connection, {token, nonce: 'a'});
+    await server.onAuthMessage(connection, {token, nonce: 'a'});
 
     const newConnection: Connection = {
       sendMessage: sendMessageCallback,
       disconnect: disconnectCallback
     };
     server.onConnection(newConnection);
-    expect(() => server.onAuthMessage(newConnection, {token, nonce: 'a'})).to.throw('Role already connected.');
+    await expect(server.onAuthMessage(newConnection, {token, nonce: 'a'})).to.be.rejectedWith('Role already connected.');
   });
   
-  it('succeeds silently if pairingId is unique for a given role', function() {
+  it('succeeds silently if pairingId is unique for a given role', async function() {
     server.onConnection(connection);
     const token = JSON.stringify({role: 'initiator', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(connection, {token, nonce: 'a'});
+    await server.onAuthMessage(connection, {token, nonce: 'a'});
 
     const newConnection: Connection = {
       sendMessage: sendMessageCallback,
@@ -68,13 +71,13 @@ describe('server', function() {
     };
     server.onConnection(newConnection);
     const newToken = JSON.stringify({role: 'initiator', pairingId: 'def', expiry: 0});
-    server.onAuthMessage(newConnection, {token: newToken, nonce: 'a'});
+    await server.onAuthMessage(newConnection, {token: newToken, nonce: 'a'});
   });
 
-  it('succeeds silently if role is unique for given pairingId', function() {
+  it('succeeds silently if role is unique for given pairingId', async function() {
     server.onConnection(connection);
     const token = JSON.stringify({role: 'initiator', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(connection, {token, nonce: 'a'});
+    await server.onAuthMessage(connection, {token, nonce: 'a'});
 
     const newConnection: Connection = {
       sendMessage: sendMessageCallback,
@@ -82,13 +85,13 @@ describe('server', function() {
     };
     server.onConnection(newConnection);
     const newToken = JSON.stringify({role: 'responder', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(newConnection, {token: newToken, nonce: 'a'});
+    await server.onAuthMessage(newConnection, {token: newToken, nonce: 'a'});
   });
   
-  it('sends peerConnect message to opposite peer', function () {
+  it('sends peerConnect message to opposite peer', async function () {
     server.onConnection(connection);
     const token = JSON.stringify({role: 'initiator', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(connection, {token, nonce: 'initiatorNonce'});
+    await server.onAuthMessage(connection, {token, nonce: 'initiatorNonce'});
 
     const responderSendMessageCallback = fake();
     const responderDisconnectCallback = fake();
@@ -98,16 +101,16 @@ describe('server', function() {
     };
     server.onConnection(responderConnection);
     const responderToken = JSON.stringify({role: 'responder', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(responderConnection, {token: responderToken, nonce: 'responderNonce'});
+    await server.onAuthMessage(responderConnection, {token: responderToken, nonce: 'responderNonce'});
 
     assert.calledOnceWithExactly(sendMessageCallback, '{"type":"peerConnect","nonce":"responderNonce"}');
     assert.calledOnceWithExactly(responderSendMessageCallback, '{"type":"peerConnect","nonce":"initiatorNonce"}');
   });
 
-  it('sends peerDisconnect message to initiator', function () {
+  it('sends peerDisconnect message to initiator', async function () {
     server.onConnection(connection);
     const token = JSON.stringify({role: 'initiator', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(connection, {token, nonce: 'a'});
+    await server.onAuthMessage(connection, {token, nonce: 'a'});
 
     const responderConnection: Connection = {
       sendMessage: fake(),
@@ -115,17 +118,17 @@ describe('server', function() {
     };
     server.onConnection(responderConnection);
     const responderToken = JSON.stringify({role: 'responder', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(responderConnection, {token: responderToken, nonce: 'a'});
+    await server.onAuthMessage(responderConnection, {token: responderToken, nonce: 'a'});
 
     server.onDisconnection(responderConnection);
 
     assert.calledWithExactly(sendMessageCallback, '{"type":"peerDisconnect"}');
   });
   
-  it('sends peerDisconnect message to responder', function () {
+  it('sends peerDisconnect message to responder', async function () {
     server.onConnection(connection);
     const token = JSON.stringify({role: 'responder', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(connection, {token, nonce: 'a'});
+    await server.onAuthMessage(connection, {token, nonce: 'a'});
 
     const initiatorConnection: Connection = {
       sendMessage: fake(),
@@ -133,17 +136,17 @@ describe('server', function() {
     };
     server.onConnection(initiatorConnection);
     const initiatorToken = JSON.stringify({role: 'initiator', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(initiatorConnection, {token: initiatorToken, nonce: 'a'});
+    await server.onAuthMessage(initiatorConnection, {token: initiatorToken, nonce: 'a'});
 
     server.onDisconnection(initiatorConnection);
 
     assert.calledWithExactly(sendMessageCallback, '{"type":"peerDisconnect"}');
   });
 
-  it('relays message from initiator to responder', function() {
+  it('relays message from initiator to responder', async function() {
     server.onConnection(connection);
     const token = JSON.stringify({role: 'initiator', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(connection, {token, nonce: 'a'});
+    await server.onAuthMessage(connection, {token, nonce: 'a'});
 
     const responderSendMessageCallback = fake();
     const responderDisconnectCallback = fake();
@@ -153,17 +156,17 @@ describe('server', function() {
     };
     server.onConnection(responderConnection);
     const responderToken = JSON.stringify({role: 'responder', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(responderConnection, {token: responderToken, nonce: 'a'});
+    await server.onAuthMessage(responderConnection, {token: responderToken, nonce: 'a'});
 
     server.onContentMessage(connection, 'hello world');
 
     assert.calledWithExactly(responderSendMessageCallback, 'hello world');
   });
 
-  it('relays message from responder to initiator', function() {
+  it('relays message from responder to initiator', async function() {
     server.onConnection(connection);
     const token = JSON.stringify({role: 'responder', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(connection, {token, nonce: 'a'});
+    await server.onAuthMessage(connection, {token, nonce: 'a'});
 
     const initiatorSendMessageCallback = fake();
     const initiatorDisconnectCallback = fake();
@@ -173,7 +176,7 @@ describe('server', function() {
     };
     server.onConnection(initiatorConnection);
     const initiatorToken = JSON.stringify({role: 'initiator', pairingId: 'abc', expiry: 0});
-    server.onAuthMessage(initiatorConnection, {token: initiatorToken, nonce: 'a'});
+    await server.onAuthMessage(initiatorConnection, {token: initiatorToken, nonce: 'a'});
 
     server.onContentMessage(connection, 'hello world');
 

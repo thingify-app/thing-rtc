@@ -19,7 +19,7 @@ describe('MessageParser', function() {
       handleContentMessage
     };
     authValidator = {
-      validateToken: () => ({
+      validateToken: async () => ({
         pairingId: 'abc',
         role: 'initiator',
         expiry: 0

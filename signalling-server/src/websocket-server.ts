@@ -1,10 +1,11 @@
 import * as WebSocket from 'ws';
+import { createPublicKey } from 'crypto';
 import { JwtAuthValidator } from './auth-validator';
 import { MessageParser } from './message-parser';
 import { Connection, Server } from "./server";
 
 export class WebSocketServer {
-    private authValidator = new JwtAuthValidator(this.publicKey);
+    private authValidator = new JwtAuthValidator(createPublicKey(this.publicKey));
     private server = new Server(this.authValidator);
     private wss: WebSocket.Server;
 

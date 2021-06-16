@@ -1,20 +1,21 @@
-import * as jwt from 'jsonwebtoken';
+import { jwtVerify, KeyLike } from 'jose/jwt/verify';
 
 export interface AuthValidator {
-    validateToken(token: string): ParsedToken;
+    validateToken(token: string): Promise<ParsedToken>;
 }
 
 export class ParseThroughAuthValidator implements AuthValidator {
-    validateToken(token: string): ParsedToken {
+    async validateToken(token: string): Promise<ParsedToken> {
         return JSON.parse(token);
     }
 }
 
 export class JwtAuthValidator implements AuthValidator {
-    constructor(private publicKey: Buffer) {}
+    constructor(private publicKey: KeyLike) {}
 
-    validateToken(token: string): ParsedToken {
-        const parsedToken = jwt.verify(token, this.publicKey, {}) as JwtToken;
+    async validateToken(token: string): Promise<ParsedToken> {
+        const result = await jwtVerify(token, this.publicKey, { algorithms: ['RS256'] });
+        const parsedToken = result.payload as unknown as ParsedToken;
         return {
             pairingId: parsedToken.pairingId,
             role: parsedToken.role,
@@ -29,10 +30,4 @@ export interface ParsedToken {
     pairingId: string;
     role: Role;
     expiry: number;
-}
-
-interface JwtToken {
-    pairingId: string;
-    role: Role;
-    iat: number;
 }

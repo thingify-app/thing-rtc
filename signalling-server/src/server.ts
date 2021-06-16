@@ -34,8 +34,8 @@ export class Server {
     }
   }
 
-  onAuthMessage(connection: Connection, message: AuthMessage) {
-    const parsedToken = this.authValidator.validateToken(message.token);
+  async onAuthMessage(connection: Connection, message: AuthMessage) {
+    const parsedToken = await this.authValidator.validateToken(message.token);
     const pairingId = parsedToken.pairingId;
     const role = parsedToken.role;
 
