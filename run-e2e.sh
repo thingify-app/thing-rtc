@@ -14,8 +14,11 @@ npm --prefix signalling-server run buildWatch &
 # Live-compile peer library in background.
 npm --prefix peer run buildWatch &
 
-# Serve example in background.
-npm --prefix example run serve &
+# Live-compile static frontend in background.
+npm --prefix deployments/static-example run buildWatch &
+
+# Serve express example in background.
+npm --prefix deployments/express run serve &
 
 # Keep running until we kill the script and all child processes.
 wait

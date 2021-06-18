@@ -1,8 +1,6 @@
 import * as WebSocket from 'ws';
 import { createPublicKey } from 'crypto';
-import { JwtAuthValidator } from './auth-validator';
-import { MessageParser } from './message-parser';
-import { Connection, Server } from "./server";
+import { Server, Connection, MessageParser, JwtAuthValidator } from 'thingrtc-signalling-server';
 
 export class WebSocketServer {
     private authValidator = new JwtAuthValidator(createPublicKey(this.publicKey));
