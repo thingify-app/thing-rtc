@@ -2,6 +2,8 @@ export interface TokenGenerator {
     /** Produces a token for authentication with the signalling server. */
     generateToken(): Promise<string>;
 
+    getPairingId(): string;
+
     getRole(): Role;
 
     /**
@@ -28,6 +30,10 @@ export class BasicTokenGenerator implements TokenGenerator {
             expiry: Number.MAX_SAFE_INTEGER
         };
         return JSON.stringify(token);
+    }
+
+    getPairingId(): string {
+        return this.pairingId;
     }
 
     getRole(): Role {

@@ -22,7 +22,7 @@ const remoteVideo = document.getElementById('remoteVideo') as HTMLVideoElement;
 const remoteMediaStream = new MediaStream();
 
 const protocol = location.protocol === 'http:' ? 'ws' : 'wss';
-const peer = new ThingPeer(`${protocol}://${location.host}/`);
+const peer = new ThingPeer(`${protocol}://${location.host}`);
 const pairingServerUrl = `${location.protocol}//${location.hostname}:8081/`;
 const pairingServer = new PairingServer(pairingServerUrl);
 const pairing = new Pairing(pairingServer);

@@ -26,7 +26,8 @@ export class SignallingServer {
 
     connect(): void {
         this.state = 'connected';
-        this.socket = new WebSocket(this.serverUrl);
+        const url = `${this.serverUrl}/${this.tokenGenerator.getPairingId()}`;
+        this.socket = new WebSocket(url);
         this.socket.addEventListener('open', async () => {
             const token = await this.tokenGenerator.generateToken();
             this.sendAuthMessage(token);

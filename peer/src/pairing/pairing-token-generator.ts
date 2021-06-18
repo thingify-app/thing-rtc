@@ -11,6 +11,10 @@ export class PairingTokenGenerator implements TokenGenerator {
         return this.pairingData.serverToken;
     }
 
+    getPairingId(): string {
+        return this.pairingData.pairingId;
+    }
+
     getRole(): Role {
         return this.pairingData.role;
     }
