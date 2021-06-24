@@ -4,6 +4,10 @@ workers_dev = true
 usage_model = "bundled"
 account_id = "fe1ba256beb0b83c5ddae18642f7ea98"
 
+[env.production]
+zone_id = "8ac5536289dd6d47714fd21fd93e3fc5"
+route = "signalling.thingify.app/*"
+
 [build]
 command = "npm run build"
 
