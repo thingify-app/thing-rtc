@@ -1,4 +1,4 @@
-import { BasicTokenGenerator, ThingPeer, Pairing, PairingServer } from 'thingrtc-peer';
+import { ThingPeer, Pairing, PairingServer } from 'thingrtc-peer';
 
 const initiatorRadio = document.getElementById('initiator') as HTMLInputElement;
 const responderRadio = document.getElementById('responder') as HTMLInputElement;
@@ -21,8 +21,9 @@ const remoteVideo = document.getElementById('remoteVideo') as HTMLVideoElement;
 
 const remoteMediaStream = new MediaStream();
 
-const protocol = location.protocol === 'http:' ? 'ws' : 'wss';
-const peer = new ThingPeer(`${protocol}://${location.host}`);
+const localhost = location.hostname === 'localhost';
+const signallingServer = localhost ? `ws://${location.host}` : `wss://signalling.thingify.app`;
+const peer = new ThingPeer(signallingServer);
 const pairingServerUrl = `${location.protocol}//${location.hostname}:8081/`;
 const pairingServer = new PairingServer(pairingServerUrl);
 const pairing = new Pairing(pairingServer);

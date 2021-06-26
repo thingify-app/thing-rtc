@@ -4,7 +4,8 @@
     "scripts": {
         "postinstall": "npm run build",
         "build": "parcel build index.html",
-        "buildWatch": "parcel watch index.html"
+        "buildWatch": "parcel watch index.html",
+        "serve": "parcel serve index.html --port 8080"
     },
     "private": true,
     "devDependencies": {

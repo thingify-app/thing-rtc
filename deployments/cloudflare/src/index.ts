@@ -1,3 +1,5 @@
+import { Server, JwtAuthValidator, Connection, MessageParser, AuthValidator } from 'thingrtc-signalling-server';
+
 export default {
     async fetch(request: Request, env: any) {
         return await handleRequest(request, env);
@@ -12,13 +14,21 @@ async function handleRequest(request: Request, env: any): Promise<Response> {
         return new Response('No path specified.', {status: 400});
     }
 
-    const id = env.RELAY.idFromName(path[0]);
-    const relay: WebsocketRelay = env.RELAY.get(id);
-    return relay.fetch(request);
+    const pairingId = env.SIGNALLING_SERVER.idFromName(path[0]);
+    const server: SignallingServer = env.SIGNALLING_SERVER.get(pairingId);
+    return server.fetch(request);
 }
 
-export class WebsocketRelay {
-    private sessions = new Set<WebSocket>();
+export class SignallingServer {
+    private authValidator = new Lazy<AuthValidator>(async () => {
+        const algorithm = {name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256'};
+        const parsedKey = JSON.parse(this.env.public_key);
+        const publicKey = await crypto.subtle.importKey('jwk', parsedKey, algorithm, true, ['verify']);
+        return new JwtAuthValidator(publicKey);
+    });
+    private server = new Lazy<Server>(async () => new Server(await this.authValidator.get()));
+
+    constructor(state: any, private env: any) {}
 
     async fetch(request: Request): Promise<Response> {
         if (request.headers.get('Upgrade') !== 'websocket') {
@@ -28,12 +38,28 @@ export class WebsocketRelay {
         const remote = pair[0];
         const local = pair[1];
         local.accept();
-        this.sessions.add(local);
+
+        const connection: Connection = {
+            sendMessage: message => local.send(message),
+            disconnect: () => local.close()
+        };
+        const server = await this.server.get();
+        server.onConnection(connection);
+
         local.addEventListener('message', async msg => {
-            this.sessions.forEach(session => session.send(msg.data));
+            const messageParser = new MessageParser({
+                handleAuthMessage: message => server.onAuthMessage(connection, message),
+                handleContentMessage: message => server.onContentMessage(connection, message)
+            });
+            try {
+                messageParser.parseMessage(msg.data);
+            } catch (error: any) {
+                console.error(error);
+            }
         });
+
         const closeHandler = () => {
-            this.sessions.delete(local);
+            server.onDisconnection(connection);
         };
         local.addEventListener('close', closeHandler);
         local.addEventListener('error', closeHandler);
@@ -55,5 +81,18 @@ declare global {
   
     interface ResponseInit {
       webSocket?: WebSocket;
+    }
+}
+
+class Lazy<T> {
+    private value: T = null;
+
+    constructor(private producer: () => Promise<T>) {}
+
+    async get(): Promise<T> {
+        if (this.value === null) {
+            this.value = await this.producer();
+        }
+        return this.value;
     }
 }
