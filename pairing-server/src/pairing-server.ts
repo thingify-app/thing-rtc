@@ -1,21 +1,18 @@
-import * as jwt from 'jsonwebtoken';
+import { SignJWT, KeyLike } from 'jose/jwt/sign';
 import { PairingEntry, Storage } from './storage';
 import { generatePairingId, generateShortcode } from './utils';
 
-const JWT_OPTIONS: jwt.SignOptions = {
-    algorithm: 'RS256'
-};
 const EXPIRY_MILLIS = 60*1000;
 
 export class PairingServer {
 
     constructor(
         private storage: Storage,
-        private privateKey: string | Buffer,
+        private privateKey: KeyLike,
         private currentMillis: () => number = () => Date.now()
     ) {}
 
-    createPairingRequest(responderPublicKey: string): ResponderPairDetails {
+    async createPairingRequest(responderPublicKey: string): Promise<ResponderPairDetails> {
         const pairingId = generatePairingId();
         const shortcode = generateShortcode();
         const expiry = this.currentMillis() + EXPIRY_MILLIS;
@@ -33,7 +30,9 @@ export class PairingServer {
             role: 'responder',
             pairingId
         };
-        const signedToken = jwt.sign(token, this.privateKey, JWT_OPTIONS);
+        const signedToken = await new SignJWT(token as any)
+            .setProtectedHeader({ alg: 'RS256' })
+            .sign(this.privateKey);
 
         return {
             pairingId,
@@ -43,7 +42,7 @@ export class PairingServer {
         };
     }
 
-    checkPairingStatus(pairingId: string): PairingStatus {
+    async checkPairingStatus(pairingId: string): Promise<PairingStatus> {
         const entry = this.storage.getEntryByPairingId(pairingId);
         const now = this.currentMillis();
 
@@ -64,7 +63,7 @@ export class PairingServer {
         }
     }
 
-    respondToPairingRequest(shortcode: string, initiatorPublicKey: string): InitiatorPairDetails {
+    async respondToPairingRequest(shortcode: string, initiatorPublicKey: string): Promise<InitiatorPairDetails> {
         const entry = this.storage.getEntryByShortcode(shortcode);
         const now = this.currentMillis();
 
@@ -80,7 +79,9 @@ export class PairingServer {
             role: 'initiator',
             pairingId: entry.pairingId
         };
-        const signedToken = jwt.sign(token, this.privateKey, JWT_OPTIONS);
+        const signedToken = await new SignJWT(token as any)
+            .setProtectedHeader({ alg: 'RS256' })
+            .sign(this.privateKey);
 
         return {
             pairingId: entry.pairingId,

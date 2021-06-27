@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as express from 'express';
-import { Server as PairingServer } from 'thingrtc-pairing-server';
-import { WebSocketServer } from './websocket-server';
+import { ExpressPairingServer } from './express-pairing-server';
+import { WebSocketSignallingServer } from './websocket-signalling-server';
 
 const publicKey = fs.readFileSync('../publicKey.pem');
 const privateKey = fs.readFileSync('../privateKey.pem');
@@ -12,5 +12,5 @@ const server = express()
     .use(express.static('node_modules/thingrtc-static-example/dist'))
     .listen(port, '0.0.0.0', () => console.log(`Listening on ${port}`));
 
-new WebSocketServer(publicKey, server);
-new PairingServer(privateKey, 8081);
+new ExpressPairingServer(privateKey, 8081);
+new WebSocketSignallingServer(publicKey, server);

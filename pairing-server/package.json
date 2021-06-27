@@ -1,34 +1,27 @@
 {
   "name": "thingrtc-pairing-server",
+  "version": "0.0.0",
   "main": "dist/index.js",
-  "bin": "cli.js",
   "scripts": {
-    "start": "node ./cli.js",
     "postinstall": "npm run build",
     "build": "tsc",
     "buildWatch": "tsc -w",
-    "serve": "nodemon --watch src -e ts --exec npm-run-all build start",
     "test": "mocha -r ts-node/register test/**/*.test.ts"
   },
   "private": true,
   "devDependencies": {
     "@types/chai": "^4.2.14",
-    "@types/express": "^4.17.11",
-    "@types/jsonwebtoken": "^8.5.1",
     "@types/mocha": "^8.0.4",
+    "@types/node": "^15.12.4",
     "@types/sinon": "^9.0.10",
     "chai": "^4.2.0",
     "mocha": "^8.2.1",
-    "nodemon": "^2.0.7",
-    "npm-run-all": "^4.1.5",
     "sinon": "^9.2.2",
     "ts-node": "^9.1.1",
     "typescript": "^4.0.5"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.17.1",
-    "jsonwebtoken": "^8.5.1",
+    "jose": "^3.13.0",
     "nanoid": "^3.1.22"
   }
 }

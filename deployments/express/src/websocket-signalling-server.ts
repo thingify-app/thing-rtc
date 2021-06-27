@@ -1,13 +1,14 @@
 import * as WebSocket from 'ws';
 import { createPublicKey } from 'crypto';
+import * as http from 'http';
 import { Server, Connection, MessageParser, JwtAuthValidator } from 'thingrtc-signalling-server';
 
-export class WebSocketServer {
+export class WebSocketSignallingServer {
     private authValidator = new JwtAuthValidator(createPublicKey(this.publicKey));
     private server = new Server(this.authValidator);
     private wss: WebSocket.Server;
 
-    constructor(private publicKey: Buffer, existingServer: any = null, port: number = null) {
+    constructor(private publicKey: Buffer, existingServer: http.Server = null, port: number = null) {
         this.wss = new WebSocket.Server({ server: existingServer, port });
         console.log('Listening...');
 
