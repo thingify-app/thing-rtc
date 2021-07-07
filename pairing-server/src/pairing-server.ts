@@ -3,28 +3,23 @@ import { PairingEntry, Storage } from './storage';
 import { generatePairingId, generateShortcode } from './utils';
 
 const EXPIRY_MILLIS = 60*1000;
+const SET_TIMEOUT = (callback: () => void, millis: number) => {
+    setTimeout(callback, millis);
+};
 
 export class PairingServer {
 
     constructor(
         private storage: Storage,
         private privateKey: KeyLike,
-        private currentMillis: () => number = () => Date.now()
+        private currentMillis: () => number = () => Date.now(),
+        private scheduleMillis: (callback: () => void, millis: number) => void = SET_TIMEOUT
     ) {}
 
-    async createPairingRequest(responderPublicKey: string): Promise<ResponderPairDetails> {
+    async createPairingRequest(responderPublicKey: string): Promise<PendingPairing> {
         const pairingId = generatePairingId();
         const shortcode = generateShortcode();
         const expiry = this.currentMillis() + EXPIRY_MILLIS;
-
-        const entry: PairingEntry = {
-            pairingId,
-            expiry,
-            shortcode,
-            responderPublicKey,
-            redeemed: false
-        };
-        this.storage.putEntry(entry);
 
         const token: PairingToken = {
             role: 'responder',
@@ -34,46 +29,42 @@ export class PairingServer {
             .setProtectedHeader({ alg: 'RS256' })
             .sign(this.privateKey);
 
-        return {
+        const initialData: InitialPairingData = {
             pairingId,
             expiry,
             shortcode,
-            responderToken: signedToken,
+            token: signedToken
         };
-    }
 
-    async checkPairingStatus(pairingId: string): Promise<PairingStatus> {
-        const entry = this.storage.getEntryByPairingId(pairingId);
-        const now = this.currentMillis();
+        const pendingPairing = new PendingPairing(initialData);
+        
+        const entry: PairingEntry = {
+            pairingId,
+            expiry,
+            shortcode,
+            responderPublicKey,
+            notifyComplete: publicKey => pendingPairing.complete(publicKey)
+        };
+        this.storage.putEntry(entry);
 
-        if (!entry || entry.expiry <= now) {
-            throw new Error('Pairing ID does not exist!');
-        }
-
-        if (entry.redeemed) {
+        this.scheduleMillis(() => {
+            pendingPairing.expire();
             this.storage.deleteEntry(entry);
-            return {
-                status: 'paired',
-                initiatorPublicKey: entry.initiatorPublicKey
-            };
-        } else {
-            return {
-                status: 'awaiting'
-            };
-        }
+        }, EXPIRY_MILLIS);
+
+        return pendingPairing;
     }
 
     async respondToPairingRequest(shortcode: string, initiatorPublicKey: string): Promise<InitiatorPairDetails> {
         const entry = this.storage.getEntryByShortcode(shortcode);
         const now = this.currentMillis();
 
-        if (!entry || entry.redeemed || entry.expiry <= now) {
+        if (!entry || entry.expiry <= now) {
             throw new Error('Shortcode does not exist!');
         }
 
-        entry.initiatorPublicKey = initiatorPublicKey;
-        entry.redeemed = true;
-        this.storage.putEntry(entry);
+        this.storage.deleteEntry(entry);
+        entry.notifyComplete(initiatorPublicKey);
 
         const token: PairingToken = {
             role: 'initiator',
@@ -91,15 +82,48 @@ export class PairingServer {
     }
 }
 
-export interface ResponderPairDetails {
+export class PendingPairing {
+    private resolve = (pairingStatus: PairingStatus) => { this.result = pairingStatus; };
+    private result: PairingStatus = null;
+
+    constructor(private initialData: InitialPairingData) {}
+
+    get pairingData(): InitialPairingData {
+        return this.initialData;
+    }
+
+    async redemptionResult(): Promise<PairingStatus> {
+        if (this.result) {
+            return this.result;
+        }
+        return new Promise((resolve, reject) => {
+            this.resolve = resolve;
+        });
+    }
+
+    complete(publicKey: string) {
+        this.resolve({
+            status: 'paired',
+            initiatorPublicKey: publicKey
+        });
+    }
+
+    expire() {
+        this.resolve({
+            status: 'expired'
+        });
+    }
+}
+
+export interface InitialPairingData {
     pairingId: string;
     shortcode: string;
-    responderToken: string;
+    token: string;
     expiry: number;
 }
 
 export interface PairingStatus {
-    status: 'awaiting' | 'paired';
+    status: 'paired' | 'expired';
     initiatorPublicKey?: string;
 }
 

@@ -28,12 +28,6 @@ import { PairingTokenGenerator } from './pairing-token-generator';
 // * returns list of pairs, each with human-readable name, pairingId, remote public key, local public key, server token, and method for signing with the non-extractable local private key.
 // * provides method to delete pairings.
 
-async function sleep(millis: number): Promise<void> {
-    return new Promise(resolve => {
-        setTimeout(resolve, millis);
-    });
-}
-
 export class Pairing {
 
     constructor(
@@ -45,15 +39,17 @@ export class Pairing {
         const keyPair = await generateKeyPair();
         const publicKey = await exportPublicKey(keyPair.publicKey);
         const response = await this.pairingServer.createPairingRequest(publicKey);
+        const initialPairingData = response.pairingData;
 
         const initialData = {
-            pairingId: response.pairingId,
-            serverToken: response.responderToken,
-            shortcode: response.shortcode,
-            localKeyPair: keyPair
+            pairingId: initialPairingData.pairingId,
+            serverToken: initialPairingData.token,
+            shortcode: initialPairingData.shortcode,
+            localKeyPair: keyPair,
+            redemptionResult: () => response.redemptionResult()
         };
 
-        return new PendingPairing(initialData, this.pairingServer, this.pairingStorage);
+        return new ConcretePendingPairing(initialData, this.pairingStorage);
     }
 
     async respondToPairing(shortcode: string): Promise<PairingResponse> {
@@ -96,12 +92,15 @@ export class Pairing {
     }
 }
 
-export class PendingPairing {
+export interface PendingPairing {
+    shortcode: string;
+    redemptionResult(): Promise<PairingRedemptionResponse>;
+}
+
+class ConcretePendingPairing implements PendingPairing {
     constructor(
         private initialData: PairingInitiation,
-        private pairingServer: PairingServer,
-        private pairingStorage: PairingStorage,
-        private sleeper: (millis: number) => Promise<void> = sleep
+        private pairingStorage: PairingStorage
     ) {}
 
     get shortcode(): string {
@@ -109,11 +108,7 @@ export class PendingPairing {
     }
 
     async redemptionResult(): Promise<PairingRedemptionResponse> {
-        let response: PairingStatus | null = null;
-        while (response?.status !== 'paired') {
-            response = await this.pairingServer.checkPairingStatus(this.initialData.pairingId);
-            await this.sleeper(1000);
-        }
+        const response = await this.initialData.redemptionResult();
         if (!response.initiatorPublicKey) {
             throw new Error('Missing public key in response.');
         }
@@ -133,11 +128,12 @@ export class PendingPairing {
     }
 }
 
-export interface PairingInitiation {
+interface PairingInitiation {
     pairingId: string;
     shortcode: string;
     serverToken: string;
     localKeyPair: CryptoKeyPair;
+    redemptionResult(): Promise<PairingStatus>;
 }
 
 export interface PairingResponse {

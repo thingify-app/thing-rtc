@@ -1,21 +1,55 @@
-import axios from 'axios';
+import axios, { AxiosInstance } from 'axios';
+import { CompletablePromise } from './completable-promise';
 
 export class PairingServer {
-    private http = axios.create({
-        baseURL: this.serverUrl
-    });
+    private httpServerUrl: string;
+    private wsServerUrl: string;
+    private http: AxiosInstance;
 
-    constructor(private serverUrl: string) {}
-
-    async createPairingRequest(responderPublicKey: string): Promise<ResponderPairDetails> {
-        const body = {
-            publicKey: responderPublicKey
-        };
-        return (await this.http.post<ResponderPairDetails>('/createPairing', body)).data;
+    constructor(serverUrl: string) {
+        this.httpServerUrl = serverUrl;
+        this.wsServerUrl = serverUrl.replace('http', 'ws');
+        this.http = axios.create({
+            baseURL: this.httpServerUrl
+        });
     }
 
-    async checkPairingStatus(pairingId: string): Promise<PairingStatus> {
-        return (await this.http.get<PairingStatus>(`/pairingStatus/${pairingId}`)).data;
+    async createPairingRequest(responderPublicKey: string): Promise<ServerPendingPairing> {
+        return new Promise((resolve, reject) => {
+            const socket = new WebSocket(this.wsServerUrl);
+            const pairingStatusPromise = new CompletablePromise<PairingStatus>();
+            let pendingPairing: ServerPendingPairing;
+
+            socket.addEventListener('open', async () => {
+                socket.send(responderPublicKey);
+            });
+
+            socket.addEventListener('message', event => {
+                if (!pendingPairing) {
+                    const pairingData = JSON.parse(event.data) as InitialPairingData;
+                    pendingPairing = {
+                        pairingData,
+                        redemptionResult: () => pairingStatusPromise.promise()
+                    };
+                    resolve(pendingPairing);
+                } else {
+                    const pairingStatus = JSON.parse(event.data) as PairingStatus;
+                    pairingStatusPromise.complete(pairingStatus);
+                    socket.close();
+                }
+            });
+
+            socket.addEventListener('error', error => {
+                console.log('Socket error.');
+                reject(error);
+            });
+
+            socket.addEventListener('close', () => {
+                console.log('Socket close.');
+                reject('Socket closed');
+                pairingStatusPromise.cancel('Socket closed');
+            });
+        });
     }
 
     async respondToPairingRequest(shortcode: string, initiatorPublicKey: string): Promise<InitiatorPairDetails> {
@@ -24,13 +58,6 @@ export class PairingServer {
         };
         return (await this.http.post<InitiatorPairDetails>(`/respondToPairing/${shortcode}`, body)).data;
     }
-}
-
-export interface ResponderPairDetails {
-    pairingId: string;
-    shortcode: string;
-    responderToken: string;
-    expiry: number;
 }
 
 export interface PairingStatus {
@@ -42,4 +69,16 @@ export interface InitiatorPairDetails {
     pairingId: string;
     responderPublicKey: string;
     initiatorToken: string;
+}
+
+export interface ServerPendingPairing {
+    pairingData: InitialPairingData;
+    redemptionResult(): Promise<PairingStatus>;
+}
+
+export interface InitialPairingData {
+    pairingId: string;
+    shortcode: string;
+    token: string;
+    expiry: number;
 }

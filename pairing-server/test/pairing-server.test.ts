@@ -1,9 +1,13 @@
 import { PairingServer } from '../src/pairing-server';
-import { expect } from 'chai';
-import { generateKeyPairSync } from 'crypto';
+import { expect, use } from 'chai';
+import * as chaiAsPromised from 'chai-as-promised';
+import { createPrivateKey, createPublicKey, generateKeyPairSync } from 'crypto';
 import 'mocha';
 import { Storage, InMemoryStorage } from '../src/storage';
-import * as jwt from 'jsonwebtoken';
+import { jwtVerify } from 'jose/jwt/verify';
+import { Scheduler } from './scheduler';
+
+use(chaiAsPromised);
 
 describe('server', function() {
   const keyPair = generateKeyPairSync('rsa', {
@@ -17,96 +21,90 @@ describe('server', function() {
       format: 'pem'
     }
   });
+  const privateKey = createPrivateKey(keyPair.privateKey);
+  const publicKey = createPublicKey(keyPair.publicKey);
+
+  let scheduler: Scheduler;
   let server: PairingServer;
   let storage: Storage;
-  let currentTimeMillis: number;
 
   beforeEach(() => {
-    currentTimeMillis = 0;
+    scheduler = new Scheduler();
     storage = new InMemoryStorage();
-    server = new PairingServer(storage, keyPair.privateKey, () => currentTimeMillis);
+    server = new PairingServer(
+      storage,
+      privateKey,
+      () => scheduler.getCurrentTimeMillis(),
+      (callback, millis) => scheduler.schedule(callback, millis)
+    );
   });
 
-  it('pairing request returns expected values', function() {
-    const response = server.createPairingRequest('abc');
-    const verifiedToken = jwt.verify(response.responderToken, keyPair.publicKey) as any;
+  it('pairing request returns expected values', async function() {
+    const response = await server.createPairingRequest('abc');
+    const verifiedToken = (await jwtVerify(response.pairingData.token, publicKey)).payload as any;
 
     expect(verifiedToken.role).to.equal('responder');
-    expect(verifiedToken.pairingId).to.equal(response.pairingId);
-    expect(response.expiry).to.equal(60000);
-  });
-  
-  it('pairing status returns awaiting prior to redemption', function() {
-    const response = server.createPairingRequest('abc');
-    const pairingId = response.pairingId;
-    const pairingStatus = server.checkPairingStatus(pairingId);
-
-    expect(pairingStatus.status).to.equal('awaiting');
-  });
-  
-  it('pairing status returns awaiting prior to redemption', function() {
-    const response = server.createPairingRequest('abc');
-    const pairingId = response.pairingId;
-    const pairingStatus = server.checkPairingStatus(pairingId);
-
-    expect(pairingStatus.status).to.equal('awaiting');
+    expect(verifiedToken.pairingId).to.equal(response.pairingData.pairingId);
+    expect(response.pairingData.expiry).to.equal(60000);
   });
 
-  it('pairing status throws on invalid pairingId', function() {
-    expect(() => server.checkPairingStatus('blah')).to.throw('Pairing ID does not exist!');
+  it('pairing redemption result returns paired state after redemption (before awaiting)', async function() {
+    const response = await server.createPairingRequest('abc');
+    await server.respondToPairingRequest(response.pairingData.shortcode, 'def');
+
+    const redemptionResult = await response.redemptionResult();
+    expect(redemptionResult.status).to.equal('paired');
+    expect(redemptionResult.initiatorPublicKey).to.equal('def');
   });
 
-  it('pairing status throws after expiry', function() {
-    const responderResponse = server.createPairingRequest('abc');
-  
-    currentTimeMillis = 70000;
+  it('pairing redemption result returns paired state after redemption (after awaiting)', async function() {
+    const response = await server.createPairingRequest('abc');
 
-    expect(() => server.checkPairingStatus(responderResponse.pairingId)).to.throw('Pairing ID does not exist!');
+    // Put respondToPairingRequest on the end of the event queue, so it happens after the "await" is executed.
+    setTimeout(() => {
+      server.respondToPairingRequest(response.pairingData.shortcode, 'def');
+    }, 1);
+
+    const redemptionResult = await response.redemptionResult();
+    expect(redemptionResult.status).to.equal('paired');
+    expect(redemptionResult.initiatorPublicKey).to.equal('def');
   });
 
-  it('pairing response retuns expected values', function() {
-    const responderResponse = server.createPairingRequest('abc');
-    const initiatorResponse = server.respondToPairingRequest(responderResponse.shortcode, 'def');
-    const verifiedToken = jwt.verify(initiatorResponse.initiatorToken, keyPair.publicKey) as any;
+  it('pairing redemption result returns expired state after expiry', async function() {
+    const response = await server.createPairingRequest('abc');
+    scheduler.setCurrentTimeMillis(70000);
+
+    const redemptionResult = await response.redemptionResult();
+    expect(redemptionResult.status).to.equal('expired');
+  });
+
+  it('pairing response returns expected values', async function() {
+    const responderResponse = await server.createPairingRequest('abc');
+    const initiatorResponse = await server.respondToPairingRequest(responderResponse.pairingData.shortcode, 'def');
+    const verifiedToken = (await jwtVerify(initiatorResponse.initiatorToken, publicKey)).payload as any;
   
     expect(verifiedToken.role).to.equal('initiator');
     expect(verifiedToken.pairingId).to.equal(initiatorResponse.pairingId);
-    expect(initiatorResponse.pairingId).to.equal(responderResponse.pairingId);
+    expect(initiatorResponse.pairingId).to.equal(responderResponse.pairingData.pairingId);
     expect(initiatorResponse.responderPublicKey).to.equal('abc');
   });
 
-  it('pairing response throws after expiry', function() {
-    const responderResponse = server.createPairingRequest('abc');
+  it('pairing response throws after expiry', async function() {
+    const responderResponse = await server.createPairingRequest('abc');
   
-    currentTimeMillis = 70000;
+    scheduler.setCurrentTimeMillis(70000);
 
-    expect(() => server.respondToPairingRequest(responderResponse.shortcode, 'def')).to.throw('Shortcode does not exist!');
+    await expect(server.respondToPairingRequest(responderResponse.pairingData.shortcode, 'def')).to.be.rejectedWith('Shortcode does not exist!');
   });
 
-  it('pairing response throws on invalid shortcode', function() {
-    expect(() => server.respondToPairingRequest('blah', 'abc')).to.throw('Shortcode does not exist!');
+  it('pairing response throws on invalid shortcode', async function() {
+    await expect(server.respondToPairingRequest('blah', 'abc')).to.be.rejectedWith('Shortcode does not exist!');
   });
 
-  it('pairing status returns expected values after redemption', function() {
-    const responderResponse = server.createPairingRequest('abc');
-    server.respondToPairingRequest(responderResponse.shortcode, 'def');
-    const pairingStatus = server.checkPairingStatus(responderResponse.pairingId);
+  it('pairing response throws if tried again after redemption', async function() {
+    const responderResponse = await server.createPairingRequest('abc');
+    await server.respondToPairingRequest(responderResponse.pairingData.shortcode, 'def');
 
-    expect(pairingStatus.status).to.equal('paired');
-  });
-
-  it('pairing response throws if tried again after redemption', function() {
-    const responderResponse = server.createPairingRequest('abc');
-    server.respondToPairingRequest(responderResponse.shortcode, 'def');
-
-    expect(() => server.respondToPairingRequest(responderResponse.shortcode, 'ghi')).to.throw('Shortcode does not exist!');
-  });
-
-  it('pairing status throws if tried again after redemption', function() {
-    const responderResponse = server.createPairingRequest('abc');
-    server.respondToPairingRequest(responderResponse.shortcode, 'def');
-    server.checkPairingStatus(responderResponse.pairingId);
-
-    expect(() => server.checkPairingStatus(responderResponse.pairingId)).to.throw('Pairing ID does not exist!');
+    await expect(server.respondToPairingRequest(responderResponse.pairingData.shortcode, 'ghi')).to.be.rejectedWith('Shortcode does not exist!');
   });
 });
