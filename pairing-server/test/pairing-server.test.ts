@@ -34,6 +34,8 @@ describe('server', function() {
     server = new PairingServer(
       storage,
       privateKey,
+      () => 'shortcode',
+      () => 'pairingId',
       () => scheduler.getCurrentTimeMillis(),
       (callback, millis) => scheduler.schedule(callback, millis)
     );

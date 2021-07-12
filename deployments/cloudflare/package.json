@@ -17,6 +17,7 @@
         "typescript": "^4.3.2"
     },
     "dependencies": {
+        "thingrtc-pairing-server": "file:../../pairing-server",
         "thingrtc-signalling-server": "file:../../signalling-server"
     }
 }

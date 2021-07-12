@@ -22,9 +22,9 @@ const remoteVideo = document.getElementById('remoteVideo') as HTMLVideoElement;
 const remoteMediaStream = new MediaStream();
 
 const localhost = location.hostname === 'localhost';
-const signallingServer = localhost ? `ws://${location.host}` : `wss://signalling.thingify.app`;
+const signallingServer = localhost ? `ws://${location.host}` : `wss://signalling.thingify.app/signalling`;
 const peer = new ThingPeer(signallingServer);
-const pairingServerUrl = `${location.protocol}//${location.hostname}:8081/`;
+const pairingServerUrl = localhost ? `http://localhost:8081` : `https://signalling.thingify.app/pairing`;
 const pairingServer = new PairingServer(pairingServerUrl);
 const pairing = new Pairing(pairingServer);
 

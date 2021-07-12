@@ -12,13 +12,15 @@ export class PairingServer {
     constructor(
         private storage: Storage,
         private privateKey: KeyLike,
+        private shortcodeGenerator: () => string = generateShortcode,
+        private pairingIdGenerator: () => string = generatePairingId,
         private currentMillis: () => number = () => Date.now(),
         private scheduleMillis: (callback: () => void, millis: number) => void = SET_TIMEOUT
     ) {}
 
     async createPairingRequest(responderPublicKey: string): Promise<PendingPairing> {
-        const pairingId = generatePairingId();
-        const shortcode = generateShortcode();
+        const shortcode = this.shortcodeGenerator();
+        const pairingId = this.pairingIdGenerator();
         const expiry = this.currentMillis() + EXPIRY_MILLIS;
 
         const token: PairingToken = {

@@ -12,7 +12,10 @@ format = "modules"
 main = "./index.mjs"
 
 [durable_objects]
-bindings = [{name = "SIGNALLING_SERVER", class_name = "SignallingServer"}]
+bindings = [
+    {name = "SIGNALLING_SERVER", class_name = "SignallingServer"},
+    {name = "PAIRING_SERVER", class_name = "PairingServer"}
+]
 
 [env.production]
 zone_id = "8ac5536289dd6d47714fd21fd93e3fc5"
@@ -21,4 +24,7 @@ route = "signalling.thingify.app/*"
 # It appears that durable_objects config is not inherited from the top level, so
 # we need to repeat it here.
 [env.production.durable_objects]
-bindings = [{name = "SIGNALLING_SERVER", class_name = "SignallingServer"}]
+bindings = [
+    {name = "SIGNALLING_SERVER", class_name = "SignallingServer"},
+    {name = "PAIRING_SERVER", class_name = "PairingServer"}
+]
