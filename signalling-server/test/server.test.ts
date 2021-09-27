@@ -4,6 +4,7 @@ import * as chaiAsPromised from 'chai-as-promised';
 import { assert, fake, SinonSpy } from 'sinon';
 import 'mocha';
 import { ParseThroughAuthValidator } from "../src/auth-validator";
+import { InMemoryConnectionStore } from "../src/connection-store";
 
 use(chaiAsPromised);
 
@@ -15,7 +16,8 @@ describe('server', function() {
 
   beforeEach(() => {
     const authValidator = new ParseThroughAuthValidator();
-    server = new Server(authValidator);
+    const connectionStore = new InMemoryConnectionStore();
+    server = new Server(authValidator, connectionStore);
     sendMessageCallback = fake();
     disconnectCallback = fake();
     connection = {
@@ -120,7 +122,7 @@ describe('server', function() {
     const responderToken = JSON.stringify({role: 'responder', pairingId: 'abc', expiry: 0});
     await server.onAuthMessage(responderConnection, {token: responderToken, nonce: 'a'});
 
-    server.onDisconnection(responderConnection);
+    await server.onDisconnection(responderConnection);
 
     assert.calledWithExactly(sendMessageCallback, '{"type":"peerDisconnect"}');
   });
@@ -138,7 +140,7 @@ describe('server', function() {
     const initiatorToken = JSON.stringify({role: 'initiator', pairingId: 'abc', expiry: 0});
     await server.onAuthMessage(initiatorConnection, {token: initiatorToken, nonce: 'a'});
 
-    server.onDisconnection(initiatorConnection);
+    await server.onDisconnection(initiatorConnection);
 
     assert.calledWithExactly(sendMessageCallback, '{"type":"peerDisconnect"}');
   });
@@ -158,7 +160,7 @@ describe('server', function() {
     const responderToken = JSON.stringify({role: 'responder', pairingId: 'abc', expiry: 0});
     await server.onAuthMessage(responderConnection, {token: responderToken, nonce: 'a'});
 
-    server.onContentMessage(connection, 'hello world');
+    await server.onContentMessage(connection, 'hello world');
 
     assert.calledWithExactly(responderSendMessageCallback, 'hello world');
   });
@@ -178,7 +180,7 @@ describe('server', function() {
     const initiatorToken = JSON.stringify({role: 'initiator', pairingId: 'abc', expiry: 0});
     await server.onAuthMessage(initiatorConnection, {token: initiatorToken, nonce: 'a'});
 
-    server.onContentMessage(connection, 'hello world');
+    await server.onContentMessage(connection, 'hello world');
 
     assert.calledWithExactly(initiatorSendMessageCallback, 'hello world');
   });
