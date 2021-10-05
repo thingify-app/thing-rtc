@@ -4,6 +4,7 @@ import { SignallingServer } from "./signalling-server";
 
 export { SignallingServer } from './signalling-server';
 export { PairingServer } from './pairing-server';
+export { DurableObjectConnection } from './durable-object-connection-store';
 
 export default {
     async fetch(request: Request, env: any): Promise<Response> {
@@ -17,8 +18,11 @@ async function handleRequest(request: Request, env: any): Promise<Response> {
     const route = path[0];
 
     if (route === 'signalling') {
-        const pairingId = env.SIGNALLING_SERVER.idFromName(path[1]);
-        const server: SignallingServer = env.SIGNALLING_SERVER.get(pairingId);
+        // We don't care what the ID of the SignallingServer is here, as we just
+        // use it to terminate this WebSocket connection and it will internally
+        // create Durable Objects with the needed pairingIds.
+        const id = env.SIGNALLING_SERVER.newUniqueId();
+        const server: SignallingServer = env.SIGNALLING_SERVER.get(id);
         return server.fetch(request);
     } else if (route === 'pairing') {
         if (!path[1]) {

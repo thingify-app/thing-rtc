@@ -1,4 +1,5 @@
 import { Server, JwtAuthValidator, Connection, MessageParser, AuthValidator } from 'thingrtc-signalling-server';
+import { DurableObjectConnectionStore } from './durable-object-connection-store';
 import { Lazy } from "./utils";
 
 export class SignallingServer {
@@ -8,7 +9,9 @@ export class SignallingServer {
         const publicKey = await crypto.subtle.importKey('jwk', parsedKey, algorithm, true, ['verify']);
         return new JwtAuthValidator(publicKey);
     });
-    private server = new Lazy<Server>(async () => new Server(await this.authValidator.get()));
+    private server = new Lazy<Server>(async () => {
+        return new Server(await this.authValidator.get(), new DurableObjectConnectionStore(this.env))
+    });
 
     constructor(state: any, private env: any) {}
 

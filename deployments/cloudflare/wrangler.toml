@@ -14,7 +14,8 @@ main = "./index.mjs"
 [durable_objects]
 bindings = [
     {name = "SIGNALLING_SERVER", class_name = "SignallingServer"},
-    {name = "PAIRING_SERVER", class_name = "PairingServer"}
+    {name = "PAIRING_SERVER", class_name = "PairingServer"},
+    {name = "DURABLE_OBJECT_CONNECTION", class_name = "DurableObjectConnection"}
 ]
 
 [env.production]
@@ -26,5 +27,6 @@ route = "signalling.thingify.app/*"
 [env.production.durable_objects]
 bindings = [
     {name = "SIGNALLING_SERVER", class_name = "SignallingServer"},
-    {name = "PAIRING_SERVER", class_name = "PairingServer"}
+    {name = "PAIRING_SERVER", class_name = "PairingServer"},
+    {name = "DURABLE_OBJECT_CONNECTION", class_name = "DurableObjectConnection"}
 ]

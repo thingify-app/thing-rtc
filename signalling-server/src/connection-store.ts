@@ -1,18 +1,18 @@
 export interface ConnectionStore {
-    putConnection(connection: Connection): Promise<void>;
-    getConnection(pairingId: string, role: Role): Promise<Connection>;
+    putConnection(connection: StoredConnection): Promise<void>;
+    getConnection(pairingId: string, role: Role): Promise<StoredConnection>;
     hasConnection(pairingId: string, role: Role): Promise<boolean>;
     deleteConnection(pairingId: string, role: Role): Promise<void>;
 }
 
 export class InMemoryConnectionStore implements ConnectionStore {
-    private connectionMap = new Map<string, Connection>();
+    private connectionMap = new Map<string, StoredConnection>();
 
-    async putConnection(connection: Connection): Promise<void> {
+    async putConnection(connection: StoredConnection): Promise<void> {
         this.connectionMap.set(this.getKey(connection.pairingId, connection.role), connection);
     }
 
-    async getConnection(pairingId: string, role: Role): Promise<Connection> {
+    async getConnection(pairingId: string, role: Role): Promise<StoredConnection> {
         return this.connectionMap.get(this.getKey(pairingId, role));
     }
 
@@ -29,7 +29,7 @@ export class InMemoryConnectionStore implements ConnectionStore {
     }
 }
 
-export interface Connection {
+export interface StoredConnection {
     pairingId: string;
     nonce: string;
     role: Role;
