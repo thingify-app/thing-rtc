@@ -59,19 +59,3 @@ async function handleRequest(request: Request, env: any): Promise<Response> {
         return new Response('Invalid path specified.', {status: 400});
     }
 }
-
-// @cloudflare/workers-types doesn't currently include types for WebSockets:
-declare global {
-    interface WebSocket {
-      accept(): void;
-    }
-  
-    class WebSocketPair {
-      0: WebSocket;
-      1: WebSocket;
-    }
-  
-    interface ResponseInit {
-      webSocket?: WebSocket;
-    }
-}

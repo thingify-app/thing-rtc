@@ -22,7 +22,7 @@ export class PairingServer {
         if (!route) {
             return await this.createPairingRequest(request);
         } else if (route === 'respondToPairing') {
-            return await this.respondToPairingRequest(path[2], (await request.json()).publicKey);
+            return await this.respondToPairingRequest(path[2], (await request.json() as any).publicKey);
         } else {
             return new Response('Invalid path.', {status: 400});
         }
@@ -49,7 +49,7 @@ export class PairingServer {
 
             messageReceived = true;
 
-            const pendingPairing = await server.createPairingRequest(msg.data);
+            const pendingPairing = await server.createPairingRequest(msg.data as string);
             const pairingData = pendingPairing.pairingData;
 
             local.send(JSON.stringify(pairingData));

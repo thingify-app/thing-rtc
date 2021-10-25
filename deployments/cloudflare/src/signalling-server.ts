@@ -37,7 +37,7 @@ export class SignallingServer {
                 handleContentMessage: message => server.onContentMessage(connection, message)
             });
             try {
-                messageParser.parseMessage(msg.data);
+                messageParser.parseMessage(msg.data as string);
             } catch (error: any) {
                 console.error(error);
             }
@@ -47,7 +47,6 @@ export class SignallingServer {
             server.onDisconnection(connection);
         };
         local.addEventListener('close', closeHandler);
-        local.addEventListener('error', closeHandler);
 
         return new Response(null, { status: 101, webSocket: remote });
     }

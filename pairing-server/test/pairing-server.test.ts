@@ -4,7 +4,7 @@ import * as chaiAsPromised from 'chai-as-promised';
 import { createPrivateKey, createPublicKey, generateKeyPairSync } from 'crypto';
 import 'mocha';
 import { Storage, InMemoryStorage } from '../src/storage';
-import { jwtVerify } from 'jose/jwt/verify';
+import { jwtVerify } from 'jose';
 import { Scheduler } from './scheduler';
 
 use(chaiAsPromised);

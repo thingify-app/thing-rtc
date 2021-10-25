@@ -8,7 +8,7 @@
     },
     "private": true,
     "devDependencies": {
-        "@cloudflare/workers-types": "^2.2.2",
+        "@cloudflare/workers-types": "^3.0.0",
         "@rollup/plugin-commonjs": "^19.0.0",
         "@rollup/plugin-node-resolve": "^13.0.0",
         "@rollup/plugin-typescript": "^8.2.1",

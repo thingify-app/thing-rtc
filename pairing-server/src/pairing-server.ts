@@ -1,4 +1,4 @@
-import { SignJWT, KeyLike } from 'jose/jwt/sign';
+import { SignJWT, KeyLike } from 'jose';
 import { PairingEntry, Storage } from './storage';
 import { generatePairingId, generateShortcode } from './utils';
 

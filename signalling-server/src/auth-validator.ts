@@ -1,4 +1,4 @@
-import { jwtVerify, KeyLike } from 'jose/jwt/verify';
+import { jwtVerify, KeyLike } from 'jose';
 
 export interface AuthValidator {
     validateToken(token: string): Promise<ParsedToken>;

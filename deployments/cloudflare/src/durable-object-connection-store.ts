@@ -57,11 +57,12 @@ class ObjectClient {
         websocket.accept();
 
         websocket.addEventListener('message', msg => {
-            const data = msg.data;
-            const type = data.type;
+            const data = msg.data as string;
+            const parsedMsg = JSON.parse(data);
+            const type = parsedMsg.type;
             
             if (type === 'peerConnect') {
-                storedConnection.sendPeerConnect(data.nonce);
+                storedConnection.sendPeerConnect(parsedMsg.nonce);
             } else if (type === 'peerDisconnect') {
                 storedConnection.sendPeerDisconnect();
             } else {
@@ -160,7 +161,7 @@ export class DurableObjectConnection {
         local.accept();
 
         local.addEventListener('message', msg => {
-            const data = JSON.parse(msg.data) as DurableObjectData;
+            const data = JSON.parse(msg.data as string) as DurableObjectData;
             this.data = data;
         });
 
