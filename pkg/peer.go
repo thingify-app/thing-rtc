@@ -12,10 +12,12 @@ type Peer interface {
 	Disconnect()
 
 	OnConnectionStateChange(f func(connectionState int))
-	OnMessage(f func(message string))
+	OnStringMessage(f func(message string))
+	OnBinaryMessage(f func(message []byte))
 	OnError(f func(err error))
 
-	SendMessage(message string)
+	SendStringMessage(message string)
+	SendBinaryMessage(message []byte)
 }
 
 func NewPeer(serverUrl string) Peer {
@@ -23,7 +25,8 @@ func NewPeer(serverUrl string) Peer {
 	return &peerImpl{
 		serverUrl:               serverUrl,
 		connectionStateListener: func(connectionState int) {},
-		messageListener:         func(message string) {},
+		stringMessageListener:   func(message string) {},
+		binaryMessageListener:   func(message []byte) {},
 		errorListener:           func(err error) {},
 	}
 }
@@ -35,7 +38,8 @@ type peerImpl struct {
 	dataChannel    *webrtc.DataChannel
 
 	connectionStateListener func(connectionState int)
-	messageListener         func(message string)
+	stringMessageListener   func(message string)
+	binaryMessageListener   func(message []byte)
 	errorListener           func(err error)
 }
 
@@ -80,16 +84,24 @@ func (p *peerImpl) OnConnectionStateChange(f func(connectionState int)) {
 	p.connectionStateListener = f
 }
 
-func (p *peerImpl) OnMessage(f func(message string)) {
-	p.messageListener = f
+func (p *peerImpl) OnStringMessage(f func(message string)) {
+	p.stringMessageListener = f
+}
+
+func (p *peerImpl) OnBinaryMessage(f func(message []byte)) {
+	p.binaryMessageListener = f
 }
 
 func (p *peerImpl) OnError(f func(err error)) {
 	p.errorListener = f
 }
 
-func (p *peerImpl) SendMessage(message string) {
+func (p *peerImpl) SendStringMessage(message string) {
 	p.dataChannel.SendText(message)
+}
+
+func (p *peerImpl) SendBinaryMessage(message []byte) {
+	p.dataChannel.Send(message)
 }
 
 func (p *peerImpl) Disconnect() {
@@ -186,6 +198,8 @@ func (p *peerImpl) handlePeerConnect() {
 
 func (p *peerImpl) handleDataChannelMessage(msg webrtc.DataChannelMessage) {
 	if msg.IsString {
-		p.messageListener(string(msg.Data))
+		p.stringMessageListener(string(msg.Data))
+	} else {
+		p.binaryMessageListener(msg.Data)
 	}
 }

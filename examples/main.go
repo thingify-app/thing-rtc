@@ -12,7 +12,7 @@ func main() {
 		Role:        "responder",
 		ResponderId: "123",
 	}
-	peer := thingrtc.NewPeer("ws://localhost:8080/")
+	peer := thingrtc.NewPeer("wss://thingify-test.herokuapp.com/")
 
 	peer.OnConnectionStateChange(func(connectionState int) {
 		switch connectionState {
@@ -23,12 +23,15 @@ func main() {
 		case thingrtc.Connected:
 			fmt.Println("Connected.")
 			for range time.Tick(time.Second) {
-				peer.SendMessage("Tick")
+				peer.SendStringMessage("Tick")
 			}
 		}
 	})
-	peer.OnMessage(func(message string) {
-		fmt.Printf("Message received: %v\n", message)
+	peer.OnStringMessage(func(message string) {
+		fmt.Printf("String message received: %v\n", message)
+	})
+	peer.OnBinaryMessage(func(message []byte) {
+		fmt.Printf("Binary message received: %v\n", message)
 	})
 
 	err := peer.Connect(tokenGenerator)
