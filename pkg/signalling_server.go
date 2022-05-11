@@ -35,24 +35,25 @@ func (s *SignallingServer) Connect() {
 	s.connected = true
 
 	go func() {
+		// This function blocks for as long as the websocket connection remains
+		// active, so just retry if anything makes it quit.
+		defer s.retryConnect()
+
 		socket, _, err := websocket.DefaultDialer.Dial(s.URL, http.Header{})
 		s.socket = socket
 		if err != nil {
-			s.retryConnect()
 			return
 		}
-
-		s.socket.SetCloseHandler(func(code int, text string) error {
-			s.retryConnect()
-			return nil
-		})
 
 		token := s.TokenGenerator.GenerateToken()
 		s.sendMessage("auth", token)
 
 		for s.connected {
 			message := serverMessage{}
-			s.socket.ReadJSON(&message)
+			err := s.socket.ReadJSON(&message)
+			if err != nil {
+				break
+			}
 			s.handleMessage(message)
 		}
 	}()
