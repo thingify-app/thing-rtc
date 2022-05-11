@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	thingrtc "github.com/thingify-app/thing-rtc-go/pkg"
+	thingrtc "github.com/thingify-app/thing-rtc-go"
 )
 
 func main() {
