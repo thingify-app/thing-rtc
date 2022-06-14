@@ -4,6 +4,8 @@ import (
 	"errors"
 
 	"github.com/pion/webrtc/v3"
+
+	"github.com/thingify-app/thing-rtc-go/codec"
 )
 
 // Peer represents a connection (attempted or actual) to a ThingRTC peer.
@@ -20,10 +22,13 @@ type Peer interface {
 	SendBinaryMessage(message []byte)
 }
 
-func NewPeer(serverUrl string) Peer {
+func NewPeer(serverUrl string, codec *codec.Codec, sources ...MediaSource) Peer {
 	// Initialise listeners as empty functions to allow them to be optional.
 	return &peerImpl{
-		serverUrl:               serverUrl,
+		serverUrl: serverUrl,
+		codec:     codec,
+		sources:   sources,
+
 		connectionStateListener: func(connectionState int) {},
 		stringMessageListener:   func(message string) {},
 		binaryMessageListener:   func(message []byte) {},
@@ -32,7 +37,10 @@ func NewPeer(serverUrl string) Peer {
 }
 
 type peerImpl struct {
-	serverUrl      string
+	serverUrl string
+	codec     *codec.Codec
+	sources   []MediaSource
+
 	server         *SignallingServer
 	peerConnection *webrtc.PeerConnection
 	dataChannel    *webrtc.DataChannel
@@ -56,7 +64,7 @@ func (p *peerImpl) Connect(tokenGenerator TokenGenerator) error {
 		URL:            p.serverUrl,
 		TokenGenerator: tokenGenerator,
 	}
-	peerConnection, err := createPeerConnection()
+	peerConnection, err := createPeerConnection(*p.codec)
 	if err != nil {
 		return err
 	}
@@ -109,7 +117,7 @@ func (p *peerImpl) Disconnect() {
 	p.connectionStateListener(Disconnected)
 }
 
-func createPeerConnection() (*webrtc.PeerConnection, error) {
+func createPeerConnection(codec codec.Codec) (*webrtc.PeerConnection, error) {
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
@@ -121,7 +129,10 @@ func createPeerConnection() (*webrtc.PeerConnection, error) {
 		},
 	}
 
-	return webrtc.NewPeerConnection(config)
+	mediaEngine := webrtc.MediaEngine{}
+	codec.CodecSelector.Populate(&mediaEngine)
+	api := webrtc.NewAPI(webrtc.WithMediaEngine(&mediaEngine))
+	return api.NewPeerConnection(config)
 }
 
 func (p *peerImpl) setupCommon() {
@@ -146,6 +157,16 @@ func (p *peerImpl) setupCommon() {
 	})
 
 	p.server.OnPeerDisconnect(func() {})
+
+	for _, source := range p.sources {
+		mediaStream, err := source.mediaStream(p.codec.CodecSelector)
+		if err != nil {
+			panic(err)
+		}
+		for _, track := range mediaStream.GetTracks() {
+			p.peerConnection.AddTrack(track)
+		}
+	}
 }
 
 func (p *peerImpl) setupInitiator() {
