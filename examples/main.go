@@ -5,13 +5,16 @@ import (
 	"time"
 
 	thingrtc "github.com/thingify-app/thing-rtc-go"
-	"github.com/thingify-app/thing-rtc-go/codec/mmal"
-	_ "github.com/thingify-app/thing-rtc-go/driver/camera"
+	"github.com/thingify-app/thing-rtc-go/codec/openh264"
+
+	_ "github.com/pion/mediadevices/pkg/driver/videotest"
+	// Uncomment below and comment above to use the camera.
+	// _ "github.com/thingify-app/thing-rtc-go/driver/camera"
 )
 
 func main() {
 	videoSource := thingrtc.CreateVideoMediaSource(640, 480)
-	codec, err := mmal.NewMmalCodec(1_000_000)
+	codec, err := openh264.NewCodec(1_000_000)
 	if err != nil {
 		panic(err)
 	}

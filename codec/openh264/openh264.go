@@ -1,14 +1,14 @@
-package x264
+package openh264
 
 import (
 	"github.com/pion/mediadevices"
-	"github.com/pion/mediadevices/pkg/codec/x264"
+	"github.com/pion/mediadevices/pkg/codec/openh264"
 
 	"github.com/thingify-app/thing-rtc-go/codec"
 )
 
-func NewX264Codec(bitrate int) (*codec.Codec, error) {
-	params, err := x264.NewParams()
+func NewCodec(bitrate int) (*codec.Codec, error) {
+	params, err := openh264.NewParams()
 	if err != nil {
 		return nil, err
 	}

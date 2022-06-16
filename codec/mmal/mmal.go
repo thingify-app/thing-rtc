@@ -7,7 +7,7 @@ import (
 	"github.com/thingify-app/thing-rtc-go/codec"
 )
 
-func NewMmalCodec(bitrate int) (*codec.Codec, error) {
+func NewCodec(bitrate int) (*codec.Codec, error) {
 	params, err := mmal.NewParams()
 	if err != nil {
 		return nil, err
