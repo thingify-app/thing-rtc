@@ -8,7 +8,19 @@ import (
 // TokenGenerator allows various forms of auth token to be presented to the signalling server.
 type TokenGenerator interface {
 	GenerateToken() string
+	GetPairingId() string
 	GetRole() string
+
+	// Generates a one-time cryptographically strong random string.
+	GenerateNonce() string
+
+	// Signs each signalling message for verification by the peer.
+	// Returns a base64-encoded string signature.
+	SignMessage(message string) (string, error)
+
+	// Verifies a signalling message signature received by the peer.
+	// The signature must be base64-encoded.
+	VerifyMessage(base64Signature string, message string) bool
 }
 
 // BasicTokenGenerator produces plain tokens without any signing, just to get started.
@@ -34,6 +46,22 @@ func (b BasicTokenGenerator) GenerateToken() string {
 	return string(jsonToken)
 }
 
+func (b BasicTokenGenerator) GetPairingId() string {
+	return b.ResponderId
+}
+
 func (b BasicTokenGenerator) GetRole() string {
 	return b.Role
+}
+
+func (b BasicTokenGenerator) GenerateNonce() string {
+	return "nonce"
+}
+
+func (b BasicTokenGenerator) SignMessage(message string) (string, error) {
+	return "", nil
+}
+
+func (b BasicTokenGenerator) VerifyMessage(base64Signature string, message string) bool {
+	return true
 }
