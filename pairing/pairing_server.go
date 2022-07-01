@@ -18,7 +18,7 @@ type PendingPairing struct {
 	shortcode        string
 	token            string
 	expiry           uint64
-	completedPairing <-chan CompletedPairing
+	completedPairing func() (*CompletedPairing, error)
 }
 
 type CompletedPairing struct {
@@ -32,89 +32,76 @@ type InitiatorPairDetails struct {
 	initiatorToken     string
 }
 
-func (ps PairingServer) createPairingRequest(responderPublicKey string) (<-chan PendingPairing, <-chan error) {
-	pendingPairing := make(chan PendingPairing)
-	completedPairing := make(chan CompletedPairing)
-	errors := make(chan error)
+func (ps PairingServer) createPairingRequest(responderPublicKey string) (*PendingPairing, error) {
+	wsUrl, err := url.Parse(ps.baseUrl)
+	if err != nil {
+		return nil, err
+	}
 
-	go func() {
-		wsUrl, err := url.Parse(ps.baseUrl)
-		if err != nil {
-			errors <- err
-			return
-		}
+	if wsUrl.Scheme == "https" {
+		wsUrl.Scheme = "wss"
+	} else if wsUrl.Scheme == "http" {
+		wsUrl.Scheme = "ws"
+	} else {
+		return nil, err
+	}
 
-		if wsUrl.Scheme == "https" {
-			wsUrl.Scheme = "wss"
-		} else if wsUrl.Scheme == "http" {
-			wsUrl.Scheme = "ws"
-		} else {
-			errors <- err
-			return
-		}
+	conn, _, err := websocket.DefaultDialer.Dial(wsUrl.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
-		conn, _, err := websocket.DefaultDialer.Dial(wsUrl.String(), nil)
-		if err != nil {
-			errors <- err
-			return
-		}
-		defer conn.Close()
+	err = conn.WriteMessage(websocket.TextMessage, []byte(responderPublicKey))
+	if err != nil {
+		return nil, err
+	}
 
-		err = conn.WriteMessage(websocket.TextMessage, []byte(responderPublicKey))
-		if err != nil {
-			errors <- err
-			return
-		}
+	pairingData := struct {
+		PairingId string
+		Shortcode string
+		Token     string
+		Expiry    uint64
+	}{}
 
-		pairingData := struct {
-			PairingId string
-			Shortcode string
-			Token     string
-			Expiry    uint64
-		}{}
+	err = conn.ReadJSON(&pairingData)
+	if err != nil {
+		return nil, err
+	}
 
-		err = conn.ReadJSON(&pairingData)
-		if err != nil {
-			errors <- err
-			return
-		}
+	pendingPairing := PendingPairing{
+		pairingId: pairingData.PairingId,
+		shortcode: pairingData.Shortcode,
+		token:     pairingData.Token,
+		expiry:    pairingData.Expiry,
+		completedPairing: func() (*CompletedPairing, error) {
+			defer conn.Close()
 
-		pendingPairing <- PendingPairing{
-			pairingId:        pairingData.PairingId,
-			shortcode:        pairingData.Shortcode,
-			token:            pairingData.Token,
-			expiry:           pairingData.Expiry,
-			completedPairing: completedPairing,
-		}
+			completedPairingData := struct {
+				Status             string
+				InitiatorPublicKey string
+			}{}
 
-		completedPairingData := struct {
-			Status             string
-			InitiatorPublicKey string
-		}{}
+			err = conn.ReadJSON(&completedPairingData)
 
-		err = conn.ReadJSON(&completedPairingData)
-		if err != nil {
-			errors <- err
-			return
-		}
+			if err != nil {
+				return nil, err
+			}
 
-		completedPairing <- CompletedPairing{
-			success:            completedPairingData.Status == "paired",
-			initiatorPublicKey: completedPairingData.InitiatorPublicKey,
-		}
-	}()
+			completedPairing := CompletedPairing{
+				success:            completedPairingData.Status == "paired",
+				initiatorPublicKey: completedPairingData.InitiatorPublicKey,
+			}
+			return &completedPairing, nil
+		},
+	}
 
-	return pendingPairing, errors
+	return &pendingPairing, nil
 }
 
-func (ps PairingServer) respondToPairingRequest(shortcode, publicKeyJwk string) (<-chan InitiatorPairDetails, <-chan error) {
-	pairDetails := make(chan InitiatorPairDetails)
-	errors := make(chan error)
-
+func (ps PairingServer) respondToPairingRequest(shortcode, publicKeyJwk string) (*InitiatorPairDetails, error) {
 	apiUrl, err := url.Parse(ps.baseUrl)
 	if err != nil {
-		errors <- err
-		return pairDetails, errors
+		return nil, err
 	}
 
 	apiUrl.Path = shortcode
@@ -123,33 +110,29 @@ func (ps PairingServer) respondToPairingRequest(shortcode, publicKeyJwk string) 
 		"publicKey": publicKeyJwk,
 	})
 
-	go func() {
-		resp, err := http.Post(apiUrl.String(), "application/json", bytes.NewBuffer(postBody))
-		if err != nil {
-			errors <- err
-			return
-		}
-		defer resp.Body.Close()
+	resp, err := http.Post(apiUrl.String(), "application/json", bytes.NewBuffer(postBody))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
-		pairDetailsResponse := struct {
-			PairingId          string
-			ResponderPublicKey string
-			InitiatorToken     string
-		}{}
+	pairDetailsResponse := struct {
+		PairingId          string
+		ResponderPublicKey string
+		InitiatorToken     string
+	}{}
 
-		decoder := json.NewDecoder(resp.Body)
-		err = decoder.Decode(&pairDetailsResponse)
-		if err != nil {
-			errors <- err
-			return
-		}
+	decoder := json.NewDecoder(resp.Body)
+	err = decoder.Decode(&pairDetailsResponse)
+	if err != nil {
+		return nil, err
+	}
 
-		pairDetails <- InitiatorPairDetails{
-			pairingId:          pairDetailsResponse.PairingId,
-			responderPublicKey: pairDetailsResponse.ResponderPublicKey,
-			initiatorToken:     pairDetailsResponse.InitiatorToken,
-		}
-	}()
+	pairDetails := InitiatorPairDetails{
+		pairingId:          pairDetailsResponse.PairingId,
+		responderPublicKey: pairDetailsResponse.ResponderPublicKey,
+		initiatorToken:     pairDetailsResponse.InitiatorToken,
+	}
 
-	return pairDetails, errors
+	return &pairDetails, nil
 }

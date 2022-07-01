@@ -49,33 +49,36 @@ func TestCreatePairingRequest(t *testing.T) {
 	pairingServer := createPairingServer(actions)
 	pendingPairing, err := pairingServer.createPairingRequest("myToken")
 
-	select {
-	case p := <-pendingPairing:
-		if p.pairingId != "abc123" {
-			t.Errorf("Incorrect pairingId: %v.", p.pairingId)
-		}
-		if p.shortcode != "short123" {
-			t.Errorf("Incorrect shortcode: %v.", p.shortcode)
-		}
-		if p.token != "token123" {
-			t.Errorf("Incorrect token: %v.", p.token)
-		}
-		if p.expiry != 123 {
-			t.Errorf("Incorrect expiry: %v.", p.expiry)
-		}
-		select {
-		case c := <-p.completedPairing:
-			if c.initiatorPublicKey != "publicKey" {
-				t.Errorf("Incorrect public key: %v.", c.initiatorPublicKey)
-			}
-			if !c.success {
-				t.Errorf("Unsuccessful pairing completion.")
-			}
-		case e := <-err:
-			t.Error(e)
-		}
-	case e := <-err:
-		t.Error(e)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if pendingPairing.pairingId != "abc123" {
+		t.Errorf("Incorrect pairingId: %v.", pendingPairing.pairingId)
+	}
+	if pendingPairing.shortcode != "short123" {
+		t.Errorf("Incorrect shortcode: %v.", pendingPairing.shortcode)
+	}
+	if pendingPairing.token != "token123" {
+		t.Errorf("Incorrect token: %v.", pendingPairing.token)
+	}
+	if pendingPairing.expiry != 123 {
+		t.Errorf("Incorrect expiry: %v.", pendingPairing.expiry)
+	}
+
+	completedPairing, err := pendingPairing.completedPairing()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if !completedPairing.success {
+		t.Error("Unsuccessful pairing response.")
+	}
+
+	if completedPairing.initiatorPublicKey != "publicKey" {
+		t.Errorf("Incorrect public key: %v.", completedPairing.initiatorPublicKey)
 	}
 }
 
@@ -93,6 +96,7 @@ func TestRespondToPairingRequest(t *testing.T) {
 		err := json.NewDecoder(r.Body).Decode(&body)
 		if err != nil {
 			t.Error(err)
+			return
 		}
 		if body["publicKey"] != "myJwk" {
 			t.Errorf("Invalid body received: %v", body)
@@ -109,18 +113,18 @@ func TestRespondToPairingRequest(t *testing.T) {
 	pairingServer := PairingServer{baseUrl: server.URL}
 	pairDetails, err := pairingServer.respondToPairingRequest("ABC123", "myJwk")
 
-	select {
-	case p := <-pairDetails:
-		if p.pairingId != "abc123" {
-			t.Errorf("Incorrect pairingId: %v.", p.pairingId)
-		}
-		if p.responderPublicKey != "publicKey" {
-			t.Errorf("Incorrect responderPublicKey: %v.", p.responderPublicKey)
-		}
-		if p.initiatorToken != "token123" {
-			t.Errorf("Incorrect initiatorToken: %v.", p.initiatorToken)
-		}
-	case e := <-err:
-		t.Error(e)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if pairDetails.pairingId != "abc123" {
+		t.Errorf("Incorrect pairingId: %v.", pairDetails.pairingId)
+	}
+	if pairDetails.responderPublicKey != "publicKey" {
+		t.Errorf("Incorrect responderPublicKey: %v.", pairDetails.responderPublicKey)
+	}
+	if pairDetails.initiatorToken != "token123" {
+		t.Errorf("Incorrect initiatorToken: %v.", pairDetails.initiatorToken)
 	}
 }
