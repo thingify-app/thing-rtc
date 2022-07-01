@@ -2,10 +2,14 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
+
+	"github.com/urfave/cli/v2"
 
 	thingrtc "github.com/thingify-app/thing-rtc-go"
 	"github.com/thingify-app/thing-rtc-go/codec/openh264"
+	"github.com/thingify-app/thing-rtc-go/pairing"
 
 	_ "github.com/pion/mediadevices/pkg/driver/videotest"
 	// Uncomment below and comment above to use the camera.
@@ -13,6 +17,91 @@ import (
 )
 
 func main() {
+	app := &cli.App{
+		Name:  "thingrtc",
+		Usage: "Explore thingrtc",
+		Commands: []*cli.Command{
+			{
+				Name:  "pair",
+				Usage: "Pair with a peer",
+				Subcommands: []*cli.Command{
+					{
+						Name:  "initiate",
+						Usage: "Initiate a pairing request",
+						Action: func(ctx *cli.Context) error {
+							return initiatePairing()
+						},
+					},
+					{
+						Name:  "respond",
+						Usage: "Respond to a pairing request with the provided shortcode",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "shortcode",
+								Usage:    "shortcode provided by initiating peer",
+								Required: true,
+							},
+						},
+						Action: func(ctx *cli.Context) error {
+							return respondToPairing(ctx.String("shortcode"))
+						},
+					},
+				},
+			},
+			{
+				Name:  "connect",
+				Usage: "Connect to a peer",
+				Action: func(ctx *cli.Context) error {
+					connect()
+					return nil
+				},
+			},
+		},
+	}
+
+	if err := app.Run(os.Args); err != nil {
+		panic(err)
+	}
+}
+
+func createPairing() pairing.Pairing {
+	return pairing.NewPairing("http://localhost:8081/")
+}
+
+func initiatePairing() error {
+	pairing := createPairing()
+
+	fmt.Printf("Creating pairing request...\n")
+	pendingResult, err := pairing.InitiatePairing()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Shortcode: %v\n", pendingResult.Shortcode)
+
+	result, err := pendingResult.PairingResult()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Pairing succeeded, pairingId: %v\n", result.PairingId)
+	return nil
+}
+
+func respondToPairing(shortcode string) error {
+	pairing := createPairing()
+
+	fmt.Printf("Responding to pairing...\n")
+	result, err := pairing.RespondToPairing(shortcode)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Pairing succeeded, pairingId: %v\n", result.PairingId)
+	return nil
+}
+
+func connect() {
 	videoSource := thingrtc.CreateVideoMediaSource(640, 480)
 	codec, err := openh264.NewCodec(1_000_000)
 	if err != nil {
