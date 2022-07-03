@@ -10,6 +10,7 @@ import (
 type Pairing struct {
 	pairingStorage PairingStorage
 	pairingServer  PairingServer
+	keyOperations  KeyOperations
 }
 
 // Represents a pairing result which is awaiting a response from the other peer.
@@ -28,13 +29,14 @@ func NewPairing(baseUrl string) Pairing {
 	return Pairing{
 		pairingStorage: NewInMemoryPairingStorage(),
 		pairingServer:  PairingServer{baseUrl},
+		keyOperations:  NewEcdsaKeyOperations(),
 	}
 }
 
 // InitiatePairing creates a pairing request, resulting in a shortcode which
 // must be provided to the peer.
 func (p *Pairing) InitiatePairing() (*PendingPairingResult, error) {
-	localKeyPair, err := GenerateEcdsaKeyPair()
+	localKeyPair, err := p.keyOperations.generateKeyPair()
 	if err != nil {
 		return nil, fmt.Errorf("generating keypair failed: %w", err)
 	}
@@ -53,7 +55,7 @@ func (p *Pairing) InitiatePairing() (*PendingPairingResult, error) {
 				return nil, fmt.Errorf("completing pending pairing failed: %w", err)
 			}
 
-			remotePublicKey, err := ImportEcdsaPublicKey(completedPairing.initiatorPublicKey)
+			remotePublicKey, err := p.keyOperations.importJwkPublicKey(completedPairing.initiatorPublicKey)
 			if err != nil {
 				return nil, fmt.Errorf("importing public key failed: %w", err)
 			}
@@ -76,7 +78,7 @@ func (p *Pairing) InitiatePairing() (*PendingPairingResult, error) {
 // RespondToPairing take a shortcode created by the initiating peer, and
 // completes the pairing request with exchange of details with this peer.
 func (p *Pairing) RespondToPairing(shortcode string) (*PairingResult, error) {
-	localKeyPair, err := GenerateEcdsaKeyPair()
+	localKeyPair, err := p.keyOperations.generateKeyPair()
 	if err != nil {
 		return nil, fmt.Errorf("generating keypair failed: %w", err)
 	}
@@ -87,7 +89,7 @@ func (p *Pairing) RespondToPairing(shortcode string) (*PairingResult, error) {
 		return nil, fmt.Errorf("responding to pairing request failed: %w", err)
 	}
 
-	remotePublicKey, err := ImportEcdsaPublicKey(pairDetails.responderPublicKey)
+	remotePublicKey, err := p.keyOperations.importJwkPublicKey(pairDetails.responderPublicKey)
 	if err != nil {
 		return nil, fmt.Errorf("importing public key failed: %w", err)
 	}

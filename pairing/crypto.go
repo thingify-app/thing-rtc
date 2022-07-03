@@ -14,6 +14,14 @@ import (
 
 const NONCE_BYTES = 18
 
+// KeyOperations represents the set of starting points for a particular public
+// key cryptography implementation.
+type KeyOperations interface {
+	importJwkPublicKey(jwk string) (PublicKey, error)
+	importJwkPrivateKey(jwk string) (PrivateKey, error)
+	generateKeyPair() (KeyPair, error)
+}
+
 type PublicKey interface {
 	verifyMessage(signature []byte, message string) bool
 	exportJwk() string
@@ -21,11 +29,12 @@ type PublicKey interface {
 
 type PrivateKey interface {
 	signMessage(message string) ([]byte, error)
+	exportJwk() string
 }
 
 type KeyPair struct {
-	PublicKey
-	PrivateKey
+	PublicKey  PublicKey
+	PrivateKey PrivateKey
 }
 
 // Generates a cryptographically-secure random string.
@@ -39,8 +48,16 @@ func GenerateNonceWithRand(rand io.Reader) string {
 	return base64.StdEncoding.EncodeToString(bytes)
 }
 
+type ecdsaKeyOperations struct{}
+
+// Returns a KeyOperations which implements ECDSA public/private keypairs using
+// the P-256 curve.
+func NewEcdsaKeyOperations() KeyOperations {
+	return ecdsaKeyOperations{}
+}
+
 // Imports a JWK-encoded ECDSA public key using the P-256 curve into our PublicKey representation.
-func ImportEcdsaPublicKey(jwk string) (key PublicKey, err error) {
+func (ecdsaKeyOperations) importJwkPublicKey(jwk string) (key PublicKey, err error) {
 	members := struct {
 		Kty string
 		Crv string
@@ -83,8 +100,60 @@ func ImportEcdsaPublicKey(jwk string) (key PublicKey, err error) {
 	return
 }
 
+func (ecdsaKeyOperations) importJwkPrivateKey(data string) (PrivateKey, error) {
+	members := struct {
+		Kty string
+		Crv string
+		X   string
+		Y   string
+		D   string
+	}{}
+	err := json.Unmarshal([]byte(data), &members)
+	if err != nil {
+		return nil, err
+	}
+
+	if members.Kty != "EC" {
+		err := fmt.Errorf("JWK algorithm %v is not acceptable", members.Kty)
+		return nil, err
+	}
+
+	if members.Crv != "P-256" {
+		err := fmt.Errorf("JWK curve %v is not acceptable", members.Crv)
+		return nil, err
+	}
+
+	x, err := stringToBigInt(members.X)
+	if err != nil {
+		return nil, err
+	}
+	y, err := stringToBigInt(members.Y)
+	if err != nil {
+		return nil, err
+	}
+	d, err := stringToBigInt(members.D)
+	if err != nil {
+		return nil, err
+	}
+
+	privateKey := &ecdsa.PrivateKey{
+		PublicKey: ecdsa.PublicKey{
+			Curve: elliptic.P256(),
+			X:     x,
+			Y:     y,
+		},
+		D: d,
+	}
+	key := ecdsaPrivateKey{
+		privateKey,
+		rand.Reader,
+	}
+
+	return key, nil
+}
+
 // Generates an ECDSA key pair using the P-256 curve.
-func GenerateEcdsaKeyPair() (KeyPair, error) {
+func (ecdsaKeyOperations) generateKeyPair() (KeyPair, error) {
 	return GenerateEcdsaKeyPairWithRand(rand.Reader)
 }
 
@@ -140,6 +209,25 @@ func (e ecdsaPublicKey) exportJwk() string {
 func (e ecdsaPrivateKey) signMessage(message string) ([]byte, error) {
 	hash := sha256.Sum256([]byte(message))
 	return ecdsa.SignASN1(e.rand, e.privateKey, hash[:])
+}
+
+func (e ecdsaPrivateKey) exportJwk() string {
+	members := struct {
+		Kty string `json:"kty"`
+		Crv string `json:"crv"`
+		X   string `json:"x"`
+		Y   string `json:"y"`
+		D   string `json:"d"`
+	}{
+		Kty: "EC",
+		Crv: "P-256",
+		X:   bigIntToString(e.privateKey.X),
+		Y:   bigIntToString(e.privateKey.Y),
+		D:   bigIntToString(e.privateKey.D),
+	}
+
+	jwk, _ := json.Marshal(members)
+	return string(jwk)
 }
 
 func stringToBigInt(str string) (val *big.Int, err error) {
