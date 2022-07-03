@@ -88,7 +88,7 @@ func TestRespondToPairingRequest(t *testing.T) {
 		if r.Method != "POST" {
 			t.Errorf("Incorrect method used: %v", r.Method)
 		}
-		if requestUrl.Path != "/ABC123" {
+		if requestUrl.Path != "/respondToPairing/ABC123" {
 			t.Errorf("Incorrect shortcode received: %v", requestUrl.Path)
 		}
 
