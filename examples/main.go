@@ -55,6 +55,20 @@ func main() {
 						},
 					},
 					{
+						Name:  "delete",
+						Usage: "Delete a particular pairing",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "id",
+								Usage:    "pairingId of the pairing to delete",
+								Required: true,
+							},
+						},
+						Action: func(ctx *cli.Context) error {
+							return deletePairing(ctx.String("id"))
+						},
+					},
+					{
 						Name:  "clear",
 						Usage: "Clear all saved pairings",
 						Action: func(ctx *cli.Context) error {
@@ -131,6 +145,12 @@ func respondToPairing(shortcode string) error {
 func listPairings() error {
 	pairing := createPairing()
 	fmt.Printf("All pairings:\n%v\n", pairing.GetAllPairingIds())
+	return nil
+}
+
+func deletePairing(pairingId string) error {
+	pairing := createPairing()
+	pairing.DeletePairing(pairingId)
 	return nil
 }
 

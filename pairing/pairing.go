@@ -128,6 +128,10 @@ func (p *Pairing) GetAllPairingIds() []string {
 	return p.pairingStorage.getAllPairingIds()
 }
 
+func (p *Pairing) DeletePairing(pairingId string) {
+	p.pairingStorage.deletePairing(pairingId)
+}
+
 func (p *Pairing) ClearAllPairings() {
 	p.pairingStorage.clearAllPairings()
 }
