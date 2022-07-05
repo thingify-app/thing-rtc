@@ -25,9 +25,9 @@ type PairingResult struct {
 }
 
 // Create a Pairing API object referring to a pairing server at baseUrl.
-func NewPairing(baseUrl string) Pairing {
+func NewPairing(baseUrl string, pairingFilename string) Pairing {
 	return Pairing{
-		pairingStorage: NewInMemoryPairingStorage(),
+		pairingStorage: NewFilePairingStorage(pairingFilename),
 		pairingServer:  PairingServer{baseUrl},
 		keyOperations:  NewEcdsaKeyOperations(),
 	}
@@ -60,13 +60,16 @@ func (p *Pairing) InitiatePairing() (*PendingPairingResult, error) {
 				return nil, fmt.Errorf("importing public key failed: %w", err)
 			}
 
-			p.pairingStorage.savePairing(pairingData{
+			err = p.pairingStorage.savePairing(pairingData{
 				pairingId:       pendingPairing.pairingId,
 				role:            "responder",
 				serverToken:     pendingPairing.token,
 				remotePublicKey: remotePublicKey,
 				localKeyPair:    localKeyPair,
 			})
+			if err != nil {
+				return nil, err
+			}
 
 			return &PairingResult{
 				PairingId: pendingPairing.pairingId,
@@ -94,13 +97,16 @@ func (p *Pairing) RespondToPairing(shortcode string) (*PairingResult, error) {
 		return nil, fmt.Errorf("importing public key failed: %w", err)
 	}
 
-	p.pairingStorage.savePairing(pairingData{
+	err = p.pairingStorage.savePairing(pairingData{
 		pairingId:       pairDetails.pairingId,
 		role:            "initiator",
 		serverToken:     pairDetails.initiatorToken,
 		remotePublicKey: remotePublicKey,
 		localKeyPair:    localKeyPair,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return &PairingResult{
 		PairingId: pairDetails.pairingId,
@@ -109,7 +115,19 @@ func (p *Pairing) RespondToPairing(shortcode string) (*PairingResult, error) {
 
 // GetTokenGenerator returns a TokenGenerator to be used when signalling to a
 // paired peer given by the pairingId.
-func (p *Pairing) GetTokenGenerator(pairingId string) thingrtc.TokenGenerator {
-	pairingData := p.pairingStorage.getPairing(pairingId)
-	return &PairingTokenGenerator{pairingData}
+func (p *Pairing) GetTokenGenerator(pairingId string) (thingrtc.TokenGenerator, error) {
+	pairingData, err := p.pairingStorage.getPairing(pairingId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PairingTokenGenerator{pairingData}, nil
+}
+
+func (p *Pairing) GetAllPairingIds() []string {
+	return p.pairingStorage.getAllPairingIds()
+}
+
+func (p *Pairing) ClearAllPairings() {
+	p.pairingStorage.clearAllPairings()
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -23,7 +24,7 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name:  "pair",
-				Usage: "Pair with a peer",
+				Usage: "Manage pairing with a peer",
 				Subcommands: []*cli.Command{
 					{
 						Name:  "initiate",
@@ -46,6 +47,20 @@ func main() {
 							return respondToPairing(ctx.String("shortcode"))
 						},
 					},
+					{
+						Name:  "list",
+						Usage: "List all saved pairings",
+						Action: func(ctx *cli.Context) error {
+							return listPairings()
+						},
+					},
+					{
+						Name:  "clear",
+						Usage: "Clear all saved pairings",
+						Action: func(ctx *cli.Context) error {
+							return clearPairings()
+						},
+					},
 				},
 			},
 			{
@@ -65,7 +80,19 @@ func main() {
 }
 
 func createPairing() pairing.Pairing {
-	return pairing.NewPairing("http://localhost:8081/")
+	userConfigDir, err := os.UserConfigDir()
+	if err != nil {
+		panic(err)
+	}
+
+	// Create our config dir if it doesn't exist.
+	configDir := path.Join(userConfigDir, "thingrtc")
+	err = os.MkdirAll(configDir, os.ModePerm)
+	if err != nil {
+		panic(err)
+	}
+
+	return pairing.NewPairing("http://localhost:8081/", path.Join(configDir, "pairing.json"))
 }
 
 func initiatePairing() error {
@@ -98,6 +125,18 @@ func respondToPairing(shortcode string) error {
 	}
 
 	fmt.Printf("Pairing succeeded, pairingId: %v\n", result.PairingId)
+	return nil
+}
+
+func listPairings() error {
+	pairing := createPairing()
+	fmt.Printf("All pairings:\n%v\n", pairing.GetAllPairingIds())
+	return nil
+}
+
+func clearPairings() error {
+	pairing := createPairing()
+	pairing.ClearAllPairings()
 	return nil
 }
 
