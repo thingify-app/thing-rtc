@@ -15,11 +15,12 @@ func createFilePairingStorage() PairingStorage {
 }
 
 func createPairingData(pairingId string) pairingData {
-	remoteKeyPair, err := GenerateEcdsaKeyPairWithRand(zeroReader{})
+	keyOperations := NewEcdsaKeyOperationsWithRand(zeroReader)
+	remoteKeyPair, err := keyOperations.generateKeyPair()
 	if err != nil {
 		panic(err)
 	}
-	localKeyPair, err := GenerateEcdsaKeyPairWithRand(zeroReader{})
+	localKeyPair, err := keyOperations.generateKeyPair()
 	if err != nil {
 		panic(err)
 	}

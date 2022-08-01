@@ -1,12 +1,16 @@
 package pairing
 
-type zeroReader struct{}
+type constReader struct {
+	value byte
+}
 
 // Make signing deterministic by providing a constant random source.
-func (zeroReader) Read(p []byte) (int, error) {
+func (c constReader) Read(p []byte) (int, error) {
 	n := len(p)
 	for i := range p {
-		p[i] = 0
+		p[i] = c.value
 	}
 	return n, nil
 }
+
+var zeroReader = constReader{0}

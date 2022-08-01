@@ -48,12 +48,18 @@ func GenerateNonceWithRand(rand io.Reader) string {
 	return base64.StdEncoding.EncodeToString(bytes)
 }
 
-type ecdsaKeyOperations struct{}
+type ecdsaKeyOperations struct {
+	rand io.Reader
+}
 
 // Returns a KeyOperations which implements ECDSA public/private keypairs using
 // the P-256 curve.
 func NewEcdsaKeyOperations() KeyOperations {
-	return ecdsaKeyOperations{}
+	return NewEcdsaKeyOperationsWithRand(rand.Reader)
+}
+
+func NewEcdsaKeyOperationsWithRand(rand io.Reader) KeyOperations {
+	return ecdsaKeyOperations{rand}
 }
 
 // Imports a JWK-encoded ECDSA public key using the P-256 curve into our PublicKey representation.
@@ -100,7 +106,7 @@ func (ecdsaKeyOperations) importJwkPublicKey(jwk string) (key PublicKey, err err
 	return
 }
 
-func (ecdsaKeyOperations) importJwkPrivateKey(data string) (PrivateKey, error) {
+func (e ecdsaKeyOperations) importJwkPrivateKey(data string) (PrivateKey, error) {
 	members := struct {
 		Kty string
 		Crv string
@@ -146,19 +152,15 @@ func (ecdsaKeyOperations) importJwkPrivateKey(data string) (PrivateKey, error) {
 	}
 	key := ecdsaPrivateKey{
 		privateKey,
-		rand.Reader,
+		e.rand,
 	}
 
 	return key, nil
 }
 
 // Generates an ECDSA key pair using the P-256 curve.
-func (ecdsaKeyOperations) generateKeyPair() (KeyPair, error) {
-	return GenerateEcdsaKeyPairWithRand(rand.Reader)
-}
-
-func GenerateEcdsaKeyPairWithRand(rand io.Reader) (keyPair KeyPair, err error) {
-	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand)
+func (e ecdsaKeyOperations) generateKeyPair() (keyPair KeyPair, err error) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), e.rand)
 	if err != nil {
 		return
 	}
@@ -169,7 +171,7 @@ func GenerateEcdsaKeyPairWithRand(rand io.Reader) (keyPair KeyPair, err error) {
 		},
 		PrivateKey: ecdsaPrivateKey{
 			privateKey,
-			rand,
+			e.rand,
 		},
 	}
 	return
@@ -186,7 +188,20 @@ type ecdsaPrivateKey struct {
 
 func (e ecdsaPublicKey) verifyMessage(signature []byte, message string) bool {
 	hash := sha256.Sum256([]byte(message))
-	return ecdsa.VerifyASN1(e.publicKey, hash[:], signature)
+
+	signatureLen := len(signature)
+	if signatureLen != 64 {
+		// Each of r,s should be 32 bytes when padded. If they don't add up to 64, this indicates incorrect padding.
+		return false
+	}
+
+	// Interpret signature as IEEE P1363 format as used by WebCrypto.
+	r := big.Int{}
+	s := big.Int{}
+	r.SetBytes(signature[:signatureLen/2])
+	s.SetBytes(signature[signatureLen/2:])
+
+	return ecdsa.Verify(e.publicKey, hash[:], &r, &s)
 }
 
 func (e ecdsaPublicKey) exportJwk() string {
@@ -208,7 +223,16 @@ func (e ecdsaPublicKey) exportJwk() string {
 
 func (e ecdsaPrivateKey) signMessage(message string) ([]byte, error) {
 	hash := sha256.Sum256([]byte(message))
-	return ecdsa.SignASN1(e.rand, e.privateKey, hash[:])
+	r, s, err := ecdsa.Sign(e.rand, e.privateKey, hash[:])
+	if err != nil {
+		return nil, err
+	}
+
+	// Render signature as IEEE P1363 as used by WebCrypto.
+	// This requires r,s values to be left-padded with zeros to make 32 bytes if they are less.
+	signatureBytes := append(padBytes(r.Bytes(), 32), padBytes(s.Bytes(), 32)...)
+
+	return signatureBytes, nil
 }
 
 func (e ecdsaPrivateKey) exportJwk() string {
@@ -245,4 +269,12 @@ func stringToBigInt(str string) (val *big.Int, err error) {
 
 func bigIntToString(val *big.Int) string {
 	return base64.RawURLEncoding.EncodeToString(val.Bytes())
+}
+
+// Left-pads input with zeros to make up to n bytes.
+func padBytes(b []byte, n int) []byte {
+	l := len(b)
+	ret := make([]byte, n)
+	copy(ret[n-l:], b)
+	return ret
 }

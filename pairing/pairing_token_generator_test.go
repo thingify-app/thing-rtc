@@ -5,7 +5,8 @@ import (
 )
 
 func createPairingTokenGenerator() (p PairingTokenGenerator, err error) {
-	keyPair, err := GenerateEcdsaKeyPairWithRand(zeroReader{})
+	keyOperations := NewEcdsaKeyOperationsWithRand(zeroReader)
+	keyPair, err := keyOperations.generateKeyPair()
 	if err != nil {
 		return
 	}
@@ -52,7 +53,7 @@ func TestSignatureValue(t *testing.T) {
 		t.Error(err)
 	}
 
-	if signature != "MEYCIQC0Z0Cw7rqAbPN8LLjvR2I0R0k6VAaZnR0B+FZbjXwzgAIhAN1LWGjQG0g5RIopyEG+vTXMrPDNyj0nP4prVYNKVEAd" {
+	if signature != "tGdAsO66gGzzfCy470diNEdJOlQGmZ0dAfhWW418M4DdS1ho0BtIOUSKKchBvr01zKzwzco9Jz+Ka1WDSlRAHQ==" {
 		t.Errorf("Incorrect signature: %v", signature)
 	}
 }
