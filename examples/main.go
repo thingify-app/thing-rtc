@@ -80,8 +80,15 @@ func main() {
 			{
 				Name:  "connect",
 				Usage: "Connect to a peer",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:     "id",
+						Usage:    "pairingId of the peer to connect to",
+						Required: true,
+					},
+				},
 				Action: func(ctx *cli.Context) error {
-					connect()
+					connect(ctx.String("id"))
 					return nil
 				},
 			},
@@ -160,14 +167,14 @@ func clearPairings() error {
 	return nil
 }
 
-func connect() {
+func connect(pairingId string) {
 	videoSource := thingrtc.CreateVideoMediaSource(640, 480)
 	codec, err := openh264.NewCodec(1_000_000)
 	if err != nil {
 		panic(err)
 	}
 
-	peer := thingrtc.NewPeer("wss://thingify-test.herokuapp.com/", codec, videoSource)
+	peer := thingrtc.NewPeer("ws://localhost:8080/", codec, videoSource)
 
 	peer.OnConnectionStateChange(func(connectionState int) {
 		switch connectionState {
@@ -189,9 +196,10 @@ func connect() {
 		fmt.Printf("Binary message received: %v\n", message)
 	})
 
-	tokenGenerator := thingrtc.BasicTokenGenerator{
-		Role:        "responder",
-		ResponderId: "123",
+	pairing := createPairing()
+	tokenGenerator, err := pairing.GetTokenGenerator(pairingId)
+	if err != nil {
+		panic(err)
 	}
 
 	err = peer.Connect(tokenGenerator)

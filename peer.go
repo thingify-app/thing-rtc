@@ -60,10 +60,7 @@ const (
 
 func (p *peerImpl) Connect(tokenGenerator TokenGenerator) error {
 	role := tokenGenerator.GetRole()
-	server := SignallingServer{
-		URL:            p.serverUrl,
-		TokenGenerator: tokenGenerator,
-	}
+	server := NewSignallingServer(p.serverUrl, tokenGenerator)
 	peerConnection, err := createPeerConnection(*p.codec)
 	if err != nil {
 		return err
