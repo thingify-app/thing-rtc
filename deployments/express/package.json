@@ -1,6 +1,7 @@
 {
     "name": "thingrtc-express",
     "scripts": {
+        "build": "tsc",
         "serve": "nodemon src/index.ts"
     },
     "private": true,
