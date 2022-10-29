@@ -18,7 +18,6 @@
         "express": "^4.17.1",
         "thingrtc-pairing-server": "file:../../pairing-server",
         "thingrtc-signalling-server": "file:../../signalling-server",
-        "thingrtc-static-example": "file:../static-example",
         "ws": "^7.5.0"
     }
 }
