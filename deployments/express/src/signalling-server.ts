@@ -6,7 +6,7 @@ export class SignallingServer {
     private authValidator = new JwtAuthValidator(createPublicKey(this.publicKey));
     private server = new Server(this.authValidator);
 
-    constructor(private publicKey: Buffer) {}
+    constructor(private publicKey: string) {}
 
     handleConnection(ws: WebSocket) {
         const connection: Connection = {

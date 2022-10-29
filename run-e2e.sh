@@ -15,6 +15,8 @@ npm --prefix signalling-server run buildWatch &
 npm --prefix peer run buildWatch &
 
 # Serve express example in background.
+export PRIVATE_KEY=$(cat privateKey.pem)
+export PUBLIC_KEY=$(cat publicKey.pem)
 npm --prefix deployments/express run serve &
 
 # Serve static frontend in background.

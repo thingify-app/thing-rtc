@@ -7,7 +7,7 @@ export class PairingServer {
     private storage = new InMemoryStorage();
     private server = new Server(this.storage, createPrivateKey(this.privateKey));
 
-    constructor(private privateKey: Buffer) {}
+    constructor(private privateKey: string) {}
 
     async handleRespondToPairing(req: Request, res: Response) {
         try {

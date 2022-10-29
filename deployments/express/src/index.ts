@@ -6,8 +6,8 @@ import { SignallingServer } from './signalling-server';
 import { WebSocketApp } from './websocket-app';
 
 const port = parseInt(process.env.PORT || '8081');
-const publicKey = fs.readFileSync('../publicKey.pem');
-const privateKey = fs.readFileSync('../privateKey.pem');
+const publicKey: string = process.env.PUBLIC_KEY;
+const privateKey: string = process.env.PRIVATE_KEY;
 
 const webSocketApp = new WebSocketApp();
 const pairingServer = new PairingServer(privateKey);
