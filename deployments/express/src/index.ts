@@ -1,16 +1,35 @@
-import * as fs from 'fs';
+import * as cors from 'cors';
 import * as express from 'express';
-import { WebSocketPairingServer } from './websocket-pairing-server';
-import { WebSocketSignallingServer } from './websocket-signalling-server';
+import * as fs from 'fs';
+import { PairingServer } from './pairing-server';
+import { SignallingServer } from './signalling-server';
+import { WebSocketApp } from './websocket-app';
 
+const port = parseInt(process.env.PORT || '8081');
 const publicKey = fs.readFileSync('../publicKey.pem');
 const privateKey = fs.readFileSync('../privateKey.pem');
 
-const port = parseInt(process.env.PORT || '8080');
+const webSocketApp = new WebSocketApp();
+const pairingServer = new PairingServer(privateKey);
+const signallingServer = new SignallingServer(publicKey);
+
+webSocketApp.route('/signalling', ws => {
+    signallingServer.handleConnection(ws);
+});
+
+webSocketApp.route('/pairing', ws => {
+    pairingServer.handleWebSocketConnection(ws);
+});
 
 const server = express()
-    .use(express.static('node_modules/thingrtc-static-example/dist'))
+    .use(express.json())
+    .use(cors())
+    .get('/', (req, res) => {
+        res.send('ThingRTC');
+    })
+    .post('/pairing/respondToPairing/:shortcode', async (req, res) => {
+        await pairingServer.handleRespondToPairing(req, res);
+    })
     .listen(port, '0.0.0.0', () => console.log(`Listening on ${port}`));
 
-new WebSocketPairingServer(privateKey, 8081);
-new WebSocketSignallingServer(publicKey, server);
+webSocketApp.listen(server);
