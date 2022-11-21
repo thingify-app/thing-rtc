@@ -104,7 +104,7 @@ func (ps PairingServer) respondToPairingRequest(shortcode, publicKeyJwk string) 
 		return nil, err
 	}
 
-	apiUrl.Path = "respondToPairing/" + shortcode
+	apiUrl.Path = apiUrl.Path + "/respondToPairing/" + shortcode
 
 	postBody, _ := json.Marshal(map[string]string{
 		"publicKey": publicKeyJwk,

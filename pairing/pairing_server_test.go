@@ -128,3 +128,34 @@ func TestRespondToPairingRequest(t *testing.T) {
 		t.Errorf("Incorrect initiatorToken: %v.", pairDetails.initiatorToken)
 	}
 }
+
+func TestRespondToPairingWithPath(t *testing.T) {
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		requestUrl := r.URL
+		if r.Method != "POST" {
+			t.Errorf("Incorrect method used: %v", r.Method)
+		}
+		if requestUrl.Path != "/pairing/respondToPairing/ABC123" {
+			t.Errorf("Incorrect path received: %v", requestUrl.Path)
+		}
+
+		w.Write([]byte(`
+		{
+			"pairingId": "abc123",
+			"responderPublicKey": "publicKey",
+			"initiatorToken": "token123"
+		}`))
+	}
+	server := httptest.NewServer(http.HandlerFunc(handler))
+	pairingServer := PairingServer{baseUrl: server.URL + "/pairing"}
+	pairDetails, err := pairingServer.respondToPairingRequest("ABC123", "myJwk")
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if pairDetails.pairingId != "abc123" {
+		t.Errorf("Incorrect pairingId: %v.", pairDetails.pairingId)
+	}
+}
