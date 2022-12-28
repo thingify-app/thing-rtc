@@ -17,6 +17,9 @@ import (
 	// _ "github.com/thingify-app/thing-rtc-go/driver/camera"
 )
 
+const PAIRING_SERVER_URL = "https://thingify-xpo4wgiz5a-ts.a.run.app/pairing"
+const SIGNALLING_SERVER_URL = "wss://thingify-xpo4wgiz5a-ts.a.run.app/signalling"
+
 func main() {
 	app := &cli.App{
 		Name:  "thingrtc",
@@ -113,7 +116,7 @@ func createPairing() pairing.Pairing {
 		panic(err)
 	}
 
-	return pairing.NewPairing("http://localhost:8081/", path.Join(configDir, "pairing.json"))
+	return pairing.NewPairing(PAIRING_SERVER_URL, path.Join(configDir, "pairing.json"))
 }
 
 func initiatePairing() error {
@@ -174,7 +177,7 @@ func connect(pairingId string) {
 		panic(err)
 	}
 
-	peer := thingrtc.NewPeer("ws://localhost:8080/", codec, videoSource)
+	peer := thingrtc.NewPeer(SIGNALLING_SERVER_URL, codec, videoSource)
 
 	peer.OnConnectionStateChange(func(connectionState int) {
 		switch connectionState {
@@ -195,6 +198,9 @@ func connect(pairingId string) {
 	peer.OnBinaryMessage(func(message []byte) {
 		fmt.Printf("Binary message received: %v\n", message)
 	})
+	peer.OnError(func(err error) {
+		fmt.Printf("Peer error: %v\n", err)
+	})
 
 	pairing := createPairing()
 	tokenGenerator, err := pairing.GetTokenGenerator(pairingId)
@@ -202,10 +208,7 @@ func connect(pairingId string) {
 		panic(err)
 	}
 
-	err = peer.Connect(tokenGenerator)
-	if err != nil {
-		panic(err)
-	}
+	peer.Connect(tokenGenerator)
 	defer peer.Disconnect()
 
 	select {}

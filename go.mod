@@ -4,6 +4,6 @@ go 1.16
 
 require (
 	github.com/gorilla/websocket v1.5.0
-	github.com/pion/mediadevices v0.3.6
-	github.com/pion/webrtc/v3 v3.1.34
+	github.com/pion/mediadevices v0.3.12
+	github.com/pion/webrtc/v3 v3.1.50
 )
