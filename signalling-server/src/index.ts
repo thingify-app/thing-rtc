@@ -1,4 +1,4 @@
 export { Server, Connection } from './server';
 export { AuthValidator, JwtAuthValidator } from './auth-validator';
-export { StoredConnection, ConnectionStore, InMemoryConnectionStore, Role } from './connection-store';
+export { ConnectionChannel, ConnectionChannelFactory, InMemoryConnectionChannelFactory } from './connection-channel';
 export { MessageParser, AuthMessage, ContentMessage, MessageHandler } from './message-parser';

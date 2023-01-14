@@ -1,6 +1,6 @@
 import { AuthValidator } from "./auth-validator";
+import { ConnectionChannelFactory, InMemoryConnectionChannelFactory } from "./connection-channel";
 import { ConnectionHandler } from "./connection-handler";
-import { ConnectionStore, InMemoryConnectionStore } from "./connection-store";
 import { AuthMessage } from "./message-parser";
 
 export class Server {
@@ -8,7 +8,7 @@ export class Server {
 
   constructor(
     private authValidator: AuthValidator,
-    private connectionStore: ConnectionStore = new InMemoryConnectionStore()
+    private channelFactory: ConnectionChannelFactory = new InMemoryConnectionChannelFactory()
   ) {}
 
   onConnection(connection: Connection) {
@@ -16,7 +16,7 @@ export class Server {
       throw new Error('Connection reference already exists.');
     }
   
-    this.connectionHandlerMap.set(connection, new ConnectionHandler(this.connectionStore, this.authValidator, connection));
+    this.connectionHandlerMap.set(connection, new ConnectionHandler(this.channelFactory, this.authValidator, connection));
   }
 
   async onAuthMessage(connection: Connection, message: AuthMessage) {

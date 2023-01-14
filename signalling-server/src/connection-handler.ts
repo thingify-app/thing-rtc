@@ -1,15 +1,18 @@
 import { AuthValidator } from "./auth-validator";
 import { AuthMessage } from "./message-parser";
-import { ConnectionStore } from './connection-store';
+import { ConnectionChannelFactory } from "./connection-channel";
+import { ChannelSession } from "./channel-session";
 
 /**
  * Manages the state machine for a single connection to the signalling server. Co-ordination with other connections is
- * managed through the provided Storage instance.
+ * managed through ConnectionChannels.
  */
 export class ConnectionHandler {
   private authState: AuthedData = null;
+  private channelSession: ChannelSession;
+  private peerConnected: boolean = false;
 
-  constructor(private storage: ConnectionStore, private authValidator: AuthValidator, private connection: Connection) {}
+  constructor(private channelFactory: ConnectionChannelFactory, private authValidator: AuthValidator, private connection: Connection) {}
     
   async onAuthMessage(message: AuthMessage) {
     if (this.authState !== null) {
@@ -20,7 +23,6 @@ export class ConnectionHandler {
     const pairingId = parsedToken.pairingId;
     const role = parsedToken.role;
     const nonce = message.nonce;
-    const peerRole = oppositeRole(role);
 
     this.authState = {
       pairingId,
@@ -28,25 +30,26 @@ export class ConnectionHandler {
       nonce
     };
 
-    if (await this.storage.hasConnection(pairingId, role)) {
-      throw new Error('Role already connected.');
-    }
-
-    await this.storage.putConnection({
-      pairingId,
-      role,
-      nonce,
-      sendMessage: msg => this.connection.sendMessage(msg),
-      sendPeerConnect: nonce => this.sendPeerConnectMessage(nonce),
-      sendPeerDisconnect: () => this.sendPeerDisconnectMessage()
+    const channel = await this.channelFactory.getConnectionChannel(pairingId);
+    this.channelSession = new ChannelSession(channel, role, {
+      onPeerConnect: async remoteNonce => {
+        // Only handle if we're not connected.
+        if (!this.peerConnected) {
+          this.peerConnected = true;
+          await this.channelSession.sendPeerConnect(nonce);
+          this.sendPeerConnectMessage(remoteNonce);
+        }
+      },
+      onMessage: message => {
+        this.connection.sendMessage(message);
+      },
+      onPeerDisconnect: () => {
+        this.peerConnected = false;
+        this.sendPeerDisconnectMessage();
+      }
     });
 
-    const peerConnection = await this.storage.getConnection(pairingId, peerRole);
-    if (peerConnection) {
-      // The most recently connected peer will get this message immediately, as their partner was already present.
-      this.sendPeerConnectMessage(peerConnection.nonce);
-      peerConnection.sendPeerConnect(message.nonce);
-    }
+    await this.channelSession.sendPeerConnect(nonce);
   }
   
   private sendPeerConnectMessage(remoteNonce: string) {
@@ -69,32 +72,17 @@ export class ConnectionHandler {
       throw new Error('Received content message without being authed.');
     }
 
-    await this.relayMessage(message);
-  }
-  
-  private async relayMessage(message: string) {
-    const pairingId = this.authState.pairingId;
-    const role = this.authState.role;
-
-    const peerRole = oppositeRole(role);
-    const peer = await this.storage.getConnection(pairingId, peerRole);
-    peer.sendMessage(message);
+    await this.channelSession.sendMessage(message);
   }
   
   async onDisconnection() {
-    await this.storage.deleteConnection(this.authState.pairingId, this.authState.role);
-    
-    const peerRole = oppositeRole(this.authState.role);
-    const peerConnection = await this.storage.getConnection(this.authState.pairingId, peerRole);
-    peerConnection?.sendPeerDisconnect();
+    await this.channelSession.sendPeerDisconnect();
+    this.authState = null;
+    this.channelSession = null;
   }
 }
 
 export type Role = 'initiator' | 'responder';
-
-function oppositeRole(role: Role): Role {
-  return role === 'initiator' ? 'responder' : 'initiator';
-}
 
 interface AuthedData {
   role: Role;
