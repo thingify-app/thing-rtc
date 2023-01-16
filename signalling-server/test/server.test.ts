@@ -170,4 +170,22 @@ describe('server', function() {
 
     assert.calledWithExactly(initiatorSendMessageCallback, 'hello world');
   });
+
+  it('closes gracefully when disconnecting before auth', async function() {
+    const initiatorSendMessageCallback = fake();
+    const initiatorDisconnectCallback = fake();
+    const initiatorConnection: Connection = {
+      sendMessage: initiatorSendMessageCallback,
+      disconnect: initiatorDisconnectCallback
+    };
+
+    server.onConnection(initiatorConnection);
+    server.onConnection(connection);
+    await server.onDisconnection(connection);
+
+    assert.notCalled(sendMessageCallback);
+    assert.notCalled(disconnectCallback);
+    assert.notCalled(initiatorSendMessageCallback);
+    assert.notCalled(initiatorDisconnectCallback);
+  });
 });

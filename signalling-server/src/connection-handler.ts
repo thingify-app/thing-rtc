@@ -9,7 +9,7 @@ import { ChannelSession } from "./channel-session";
  */
 export class ConnectionHandler {
   private authState: AuthedData = null;
-  private channelSession: ChannelSession;
+  private channelSession: ChannelSession = null;
   private peerConnected: boolean = false;
 
   constructor(private channelFactory: ConnectionChannelFactory, private authValidator: AuthValidator, private connection: Connection) {}
@@ -76,7 +76,7 @@ export class ConnectionHandler {
   }
   
   async onDisconnection() {
-    await this.channelSession.sendPeerDisconnect();
+    await this.channelSession?.sendPeerDisconnect();
     this.authState = null;
     this.channelSession = null;
   }
