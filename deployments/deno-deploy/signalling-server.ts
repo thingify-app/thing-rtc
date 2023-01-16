@@ -1,0 +1,46 @@
+// @deno-types="./dist/index.d.ts"
+import { Server, Connection, JwtAuthValidator, MessageParser } from './dist/index.js';
+import { BroadcastChannelConnectionChannelFactory } from './connection-channel.ts';
+
+export class SignallingServer {
+    private server: Server;
+
+    constructor(publicKey: CryptoKey) {
+        const authValidator = new JwtAuthValidator(publicKey);
+        this.server = new Server(authValidator, new BroadcastChannelConnectionChannelFactory());
+    }
+
+    handleConnection(ws: WebSocket) {
+        const connection: Connection = {
+            // TODO: handle case where sendMessage is called after disconnect.
+            disconnect: () => ws.close(),
+            sendMessage: message => ws.send(message)
+        };
+    
+        this.server.onConnection(connection);
+    
+        ws.onmessage = event => {
+            const data = event.data;
+            console.log(`Message received: ${data}`);
+            const messageParser = new MessageParser({
+                handleAuthMessage: message => this.server.onAuthMessage(connection, message),
+                handleContentMessage: message => this.server.onContentMessage(connection, message)
+            });
+            try {
+                messageParser.parseMessage(data.toString());
+            } catch (error: any) {
+                console.error(error);
+            }
+        };
+    
+        ws.onclose = () => {
+            this.server.onDisconnection(connection);
+            console.log('Connection closed.');
+        };
+
+        ws.onerror = error => {
+            this.server.onDisconnection(connection);
+            console.error(`Connection error: ${error}`);
+        }
+    }
+}

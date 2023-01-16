@@ -4,8 +4,10 @@
   "main": "dist/index.js",
   "scripts": {
     "postinstall": "npm run build",
-    "build": "tsc",
-    "buildWatch": "tsc -w",
+    "buildTypes": "tsc --emitDeclarationOnly",
+    "buildBundle": "esbuild src/index.ts --bundle --format=esm --outdir=dist",
+    "build": "npm run buildTypes && npm run buildBundle",
+    "buildWatch": "npm run build -- --watch",
     "test": "mocha -r ts-node/register test/**/*.test.ts"
   },
   "private": true,
@@ -17,6 +19,7 @@
     "@types/sinon": "^9.0.10",
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
+    "esbuild": "^0.17.0",
     "mocha": "^8.2.1",
     "sinon": "^9.2.2",
     "ts-node": "^9.1.1",
