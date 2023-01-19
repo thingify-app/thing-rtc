@@ -1,11 +1,11 @@
 import * as WebSocket from 'ws';
 import { createPrivateKey } from 'crypto';
-import { PairingServer as Server, InMemoryStorage } from 'thingrtc-pairing-server';
+import { PairingServer as Server, InMemoryConnectionChannelFactory } from 'thingrtc-pairing-server';
 import { Request, Response } from 'express';
 
 export class PairingServer {
-    private storage = new InMemoryStorage();
-    private server = new Server(this.storage, createPrivateKey(this.privateKey));
+    private channelFactory = new InMemoryConnectionChannelFactory();
+    private server = new Server(this.channelFactory, createPrivateKey(this.privateKey));
 
     constructor(private privateKey: string) {}
 

@@ -3,9 +3,10 @@ import { expect, use } from 'chai';
 import * as chaiAsPromised from 'chai-as-promised';
 import { createPrivateKey, createPublicKey, generateKeyPairSync } from 'crypto';
 import 'mocha';
-import { Storage, InMemoryStorage } from '../src/storage';
 import { jwtVerify } from 'jose';
 import { Scheduler } from './scheduler';
+import { ConnectionChannelFactory, InMemoryConnectionChannelFactory } from '../src/connection-channel';
+import { timeoutWrapperFactory } from '../src/utils';
 
 use(chaiAsPromised);
 
@@ -26,18 +27,20 @@ describe('server', function() {
 
   let scheduler: Scheduler;
   let server: PairingServer;
-  let storage: Storage;
+  let channelFactory: ConnectionChannelFactory;
 
   beforeEach(() => {
     scheduler = new Scheduler();
-    storage = new InMemoryStorage();
+    channelFactory = new InMemoryConnectionChannelFactory();
     server = new PairingServer(
-      storage,
+      channelFactory,
       privateKey,
       () => 'shortcode',
       () => 'pairingId',
       () => scheduler.getCurrentTimeMillis(),
-      (callback, millis) => scheduler.schedule(callback, millis)
+      timeoutWrapperFactory(millis => new Promise((resolve, reject) => {
+        scheduler.schedule(reject, millis);
+      }))
     );
   });
 
@@ -62,6 +65,20 @@ describe('server', function() {
   it('pairing redemption result returns paired state after redemption (after awaiting)', async function() {
     const response = await server.createPairingRequest('abc');
 
+    // Put respondToPairingRequest on the end of the event queue, so it happens after the "await" is executed.
+    setTimeout(() => {
+      server.respondToPairingRequest(response.pairingData.shortcode, 'def');
+    }, 1);
+
+    const redemptionResult = await response.redemptionResult();
+    expect(redemptionResult.status).to.equal('paired');
+    expect(redemptionResult.initiatorPublicKey).to.equal('def');
+  });
+
+  it('pairing redemption result returns paired state after redemption (after delay)', async function() {
+    const response = await server.createPairingRequest('abc');
+    scheduler.setCurrentTimeMillis(50000);
+    
     // Put respondToPairingRequest on the end of the event queue, so it happens after the "await" is executed.
     setTimeout(() => {
       server.respondToPairingRequest(response.pairingData.shortcode, 'def');
@@ -100,12 +117,17 @@ describe('server', function() {
   });
 
   it('pairing response throws on invalid shortcode', async function() {
+    // Allow for timeout of shortcode query.
+    scheduler.setCurrentTimeMillis(2000);
     await expect(server.respondToPairingRequest('blah', 'abc')).to.be.rejectedWith('Shortcode does not exist!');
   });
 
   it('pairing response throws if tried again after redemption', async function() {
     const responderResponse = await server.createPairingRequest('abc');
     await server.respondToPairingRequest(responderResponse.pairingData.shortcode, 'def');
+
+    // Allow for timeout of shortcode query.
+    scheduler.setCurrentTimeMillis(2000);
 
     await expect(server.respondToPairingRequest(responderResponse.pairingData.shortcode, 'ghi')).to.be.rejectedWith('Shortcode does not exist!');
   });

@@ -12,3 +12,20 @@ export function generateShortcode(): string {
 export function generatePairingId(): string {
     return nanoid();
 }
+
+const realTimeout = function (millis: number): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        setTimeout(reject, millis);
+    });
+};
+
+export type TimeoutWrapper = <T>(promise: Promise<T>, millis: number) => Promise<T>;
+
+export const realTimeoutWrapper = timeoutWrapperFactory(realTimeout);
+
+export function timeoutWrapperFactory(timeout: (millis: number) => Promise<void>): TimeoutWrapper {
+    return async <T>(promise: Promise<T>, millis: number) => {
+        const result = await Promise.race([promise, timeout(millis)]);
+        return result as T;
+    }
+}
