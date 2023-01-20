@@ -17,8 +17,8 @@ import (
 	// _ "github.com/thingify-app/thing-rtc-go/driver/camera"
 )
 
-const PAIRING_SERVER_URL = "https://thingify-xpo4wgiz5a-ts.a.run.app/pairing"
-const SIGNALLING_SERVER_URL = "wss://thingify-xpo4wgiz5a-ts.a.run.app/signalling"
+const PAIRING_SERVER_URL = "https://thingify.deno.dev/pairing"
+const SIGNALLING_SERVER_URL = "wss://thingify.deno.dev/signalling"
 
 func main() {
 	app := &cli.App{
