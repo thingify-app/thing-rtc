@@ -1,5 +1,5 @@
-// @deno-types="./dist/index.d.ts"
-import { ConnectionChannel, ConnectionChannelFactory } from "./dist/index.js";
+// @deno-types="./dist/signalling-server/index.d.ts"
+import { ConnectionChannel, ConnectionChannelFactory } from "./dist/signalling-server/index.js";
   
 export class BroadcastChannelConnectionChannelFactory implements ConnectionChannelFactory {  
   async getConnectionChannel(channelId: string): Promise<ConnectionChannel> {

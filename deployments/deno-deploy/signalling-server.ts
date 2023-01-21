@@ -1,5 +1,5 @@
-// @deno-types="./dist/index.d.ts"
-import { Server, Connection, JwtAuthValidator, MessageParser } from './dist/index.js';
+// @deno-types="./dist/signalling-server/index.d.ts"
+import { Server, Connection, JwtAuthValidator, MessageParser } from './dist/signalling-server/index.js';
 import { BroadcastChannelConnectionChannelFactory } from './connection-channel.ts';
 
 export class SignallingServer {
