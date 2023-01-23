@@ -19,4 +19,8 @@ export class BroadcastChannelConnectionChannel implements ConnectionChannel {
   async sendMessage(message: string): Promise<void> {
     this.channel.postMessage(message);
   }
+
+  close() {
+    this.channel.close();
+  }
 }

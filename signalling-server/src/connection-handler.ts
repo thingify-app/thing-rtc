@@ -49,6 +49,10 @@ export class ConnectionHandler {
       }
     });
 
+    // Start separately to construction, so that the this.channelSession
+    // reference is valid in listeners above.
+    this.channelSession.start();
+
     await this.channelSession.sendPeerConnect(nonce);
   }
   
@@ -77,6 +81,7 @@ export class ConnectionHandler {
   
   async onDisconnection() {
     await this.channelSession?.sendPeerDisconnect();
+    this.channelSession?.close();
     this.authState = null;
     this.channelSession = null;
   }

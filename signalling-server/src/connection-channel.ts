@@ -12,6 +12,7 @@ export interface ConnectionChannelFactory {
 export interface ConnectionChannel {
   sendMessage(message: string): Promise<void>;
   onMessage(listener: (message: string) => void): void;
+  close(): void;
 }
 
 export class InMemoryConnectionChannelFactory implements ConnectionChannelFactory {
@@ -38,5 +39,9 @@ export class InMemoryConnectionChannel implements ConnectionChannel {
 
   async sendMessage(message: string): Promise<void> {
     this.listeners.forEach(listener => listener(message));
+  }
+
+  close(): void {
+    this.listeners = [];
   }
 }

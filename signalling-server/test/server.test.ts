@@ -194,4 +194,26 @@ describe('server', function() {
     await server.onDisconnection(connection);
     await server.onDisconnection(connection);
   });
+
+  it('disconnected peer does not receive messages', async function() {
+    server.onConnection(connection);
+    const token = JSON.stringify({role: 'responder', pairingId: 'abc', expiry: 0});
+    await server.onAuthMessage(connection, {token, nonce: 'a'});
+    await server.onDisconnection(connection);
+
+    const initiatorSendMessageCallback = fake();
+    const initiatorDisconnectCallback = fake();
+    const initiatorConnection: Connection = {
+      sendMessage: initiatorSendMessageCallback,
+      disconnect: initiatorDisconnectCallback
+    };
+
+    server.onConnection(initiatorConnection);
+    const initiatorToken = JSON.stringify({role: 'initiator', pairingId: 'abc', expiry: 0});
+    await server.onAuthMessage(initiatorConnection, {token: initiatorToken, nonce: 'a'});
+
+    await server.onContentMessage(initiatorConnection, 'hello world');
+
+    assert.notCalled(sendMessageCallback);
+  });
 });

@@ -8,7 +8,9 @@ export class ChannelSession {
     private channel: ConnectionChannel,
     private role: string,
     private handlers: ChannelSessionHandlers
-  ) {
+  ) {}
+
+  start(): void {
     this.channel.onMessage(message => this.handleMessage(message));
   }
 
@@ -22,6 +24,10 @@ export class ChannelSession {
 
   async sendPeerDisconnect(): Promise<void> {
     this.sendChannelMessage('peerDisconnect', null);
+  }
+
+  close(): void {
+    this.channel.close();
   }
   
   private handleMessage(message: string) {
