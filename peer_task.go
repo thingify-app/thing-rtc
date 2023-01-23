@@ -3,6 +3,7 @@ package thingrtc
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/pion/webrtc/v3"
 
@@ -47,8 +48,10 @@ func (p *peerTask) AttemptConnect(tokenGenerator TokenGenerator) error {
 
 	peerConnection.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		if state == webrtc.PeerConnectionStateConnected {
+			fmt.Printf("Peer connected.\n")
 			peerConnectionSuccess <- nil
 		} else if state == webrtc.PeerConnectionStateClosed || state == webrtc.PeerConnectionStateFailed {
+			fmt.Printf("Peer failed.\n")
 			peerConnectionFailed <- nil
 		}
 	})
@@ -95,6 +98,7 @@ func (p *peerTask) SendBinaryMessage(message []byte) {
 }
 
 func (p *peerTask) Disconnect() {
+	fmt.Printf("peerTask disconnecting...\n")
 	if p.server != nil {
 		p.server.Disconnect()
 	}
@@ -118,9 +122,15 @@ func createPeerConnection(codec *codec.Codec) (*webrtc.PeerConnection, error) {
 		},
 	}
 
+	settingEngine := webrtc.SettingEngine{}
+	settingEngine.SetICETimeouts(5*time.Second, 5*time.Second, 2*time.Second)
+
 	mediaEngine := webrtc.MediaEngine{}
 	codec.CodecSelector.Populate(&mediaEngine)
-	api := webrtc.NewAPI(webrtc.WithMediaEngine(&mediaEngine))
+	api := webrtc.NewAPI(
+		webrtc.WithMediaEngine(&mediaEngine),
+		webrtc.WithSettingEngine(settingEngine),
+	)
 	return api.NewPeerConnection(config)
 }
 
@@ -141,7 +151,7 @@ func (p *peerTask) setupListeners(role string) error {
 
 func (p *peerTask) setupCommon() {
 	p.peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
-		if candidate != nil {
+		if candidate != nil && p.server != nil {
 			p.server.SendIceCandidate(candidate.ToJSON())
 		}
 	})

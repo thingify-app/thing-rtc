@@ -373,3 +373,40 @@ func TestInvalidSignatureMessage(t *testing.T) {
 		// Continue
 	}
 }
+
+func TestSendMessageConcurrentRace(t *testing.T) {
+	actions := func(conn *websocket.Conn) {
+		// Consume auth message
+		conn.ReadMessage()
+
+		// Send peer connect message
+		peerConnect := PeerConnectMessage{
+			Type:  "peerConnect",
+			Nonce: "myNonce",
+		}
+		conn.WriteJSON(&peerConnect)
+
+		// Just keep listening for messages.
+		var err error = nil
+		for err == nil {
+			_, _, err = conn.ReadMessage()
+		}
+	}
+
+	signallingServer, channels := createSignallingServer(newTokenGenerator(), actions)
+	signallingServer.Connect()
+
+	select {
+	case <-channels.peerConnect:
+		// Continue
+	case err := <-channels.err:
+		t.Fatal(err)
+	}
+
+	// Try to trigger a concurrent write to the WebSocket.
+	for i := 0; i < 1000; i++ {
+		go func() {
+			signallingServer.SendIceCandidate(webrtc.ICECandidateInit{})
+		}()
+	}
+}

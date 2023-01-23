@@ -1,6 +1,8 @@
 package thingrtc
 
 import (
+	"fmt"
+
 	"github.com/pion/webrtc/v3"
 	"github.com/thingify-app/thing-rtc-go/codec"
 )
@@ -75,9 +77,12 @@ func (p *peerImpl) Connect(tokenGenerator TokenGenerator) {
 	// No-op if we're already connecting/connected.
 	if !p.connected {
 		p.connected = true
+		attempts := 0
 		go func() {
 			// Keep attempting to connect forever until connected is false.
 			for p.connected {
+				fmt.Printf("Attempting to connect (attempt %v)...\n", attempts)
+				attempts++
 				p.peerTask = &peerTask{
 					serverUrl: p.serverUrl,
 					codec:     p.codec,

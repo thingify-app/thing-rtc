@@ -24,6 +24,8 @@ type SignallingServer struct {
 	connected   bool
 	remoteNonce string
 
+	sendChan chan interface{}
+
 	peerConnectListener    func()
 	iceCandidateListener   func(candidate webrtc.ICECandidateInit)
 	offerListener          func(offer webrtc.SessionDescription)
@@ -33,11 +35,13 @@ type SignallingServer struct {
 }
 
 func NewSignallingServer(serverUrl string, tokenGenerator TokenGenerator) SignallingServer {
-	// Initialise listeners as empty functions to allow them to be optional.
 	return SignallingServer{
 		URL:            serverUrl,
 		TokenGenerator: tokenGenerator,
 
+		sendChan: make(chan interface{}),
+
+		// Initialise listeners as empty functions to allow them to be optional.
 		peerConnectListener:    func() {},
 		iceCandidateListener:   func(candidate webrtc.ICECandidateInit) {},
 		offerListener:          func(offer webrtc.SessionDescription) {},
@@ -65,6 +69,8 @@ func (s *SignallingServer) Connect() {
 			s.errorListener(err)
 			return
 		}
+
+		s.startSendLoop()
 
 		localNonce := s.TokenGenerator.GenerateNonce()
 		token := s.TokenGenerator.GenerateToken()
@@ -159,10 +165,7 @@ func (s *SignallingServer) sendAuthMessage(localNonce string, token string) erro
 		Data: jsonData,
 	}
 
-	err = s.socket.WriteJSON(authMessage)
-	if err != nil {
-		return err
-	}
+	s.sendChan <- authMessage
 
 	return nil
 }
@@ -195,15 +198,28 @@ func (s *SignallingServer) sendSignedMessage(msgType string, data interface{}) e
 		Signature: signature,
 		Data:      jsonData,
 	}
-	err = s.socket.WriteJSON(message)
-	if err != nil {
-		return err
-	}
+
+	s.sendChan <- message
 
 	return nil
 }
 
+// Avoids concurrent writes to the socket by queueing them up with a channel.
+func (s *SignallingServer) startSendLoop() {
+	go func() {
+		for s.connected {
+			message := <-s.sendChan
+			fmt.Printf("Sending message: %v\n", message)
+			err := s.socket.WriteJSON(message)
+			if err != nil {
+				fmt.Printf("Error sending message: %v\n", err)
+			}
+		}
+	}()
+}
+
 func (s *SignallingServer) handleMessage(localNonce string, message signedMessage) error {
+	fmt.Printf("Message received: %v\n", message)
 	if message.Type == "peerConnect" {
 		// Extract the desired nonce from our peer.
 		nonce := message.Nonce
