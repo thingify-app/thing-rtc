@@ -35,9 +35,9 @@ describe('server', function() {
     expect(() => server.onConnection(connection)).to.throw('Connection reference already exists.');
   });
 
-  it('succeeds silently on connection if disconnected after initial connection', function() {
+  it('succeeds silently on connection if disconnected after initial connection', async function() {
     server.onConnection(connection);
-    server.onDisconnection(connection);
+    await server.onDisconnection(connection);
     server.onConnection(connection);
   });
   
@@ -187,5 +187,11 @@ describe('server', function() {
     assert.notCalled(disconnectCallback);
     assert.notCalled(initiatorSendMessageCallback);
     assert.notCalled(initiatorDisconnectCallback);
+  });
+
+  it('gracefully handles repeated calls of onDisconnection', async function() {
+    server.onConnection(connection);
+    await server.onDisconnection(connection);
+    await server.onDisconnection(connection);
   });
 });

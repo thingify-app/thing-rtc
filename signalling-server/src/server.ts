@@ -30,7 +30,7 @@ export class Server {
   async onDisconnection(connection: Connection) {
     const connectionHandler = this.connectionHandlerMap.get(connection);
     this.connectionHandlerMap.delete(connection);
-    await connectionHandler.onDisconnection();
+    await connectionHandler?.onDisconnection();
   }
 }
 
