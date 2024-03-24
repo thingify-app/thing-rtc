@@ -21,7 +21,11 @@ type Peer interface {
 	SendBinaryMessage(message []byte)
 }
 
-func NewPeer(serverUrl string, codec *codec.Codec, sources ...MediaSource) Peer {
+func NewPeer(serverUrl string) Peer {
+	return NewPeerWithMedia(serverUrl, nil)
+}
+
+func NewPeerWithMedia(serverUrl string, codec *codec.Codec, sources ...MediaSource) Peer {
 	// Only map sources to tracks once at initialisation - otherwise we break Pion driver state.
 	tracks := sourcesToTracks(codec, sources)
 
@@ -40,6 +44,10 @@ func NewPeer(serverUrl string, codec *codec.Codec, sources ...MediaSource) Peer 
 
 func sourcesToTracks(codec *codec.Codec, sources []MediaSource) []webrtc.TrackLocal {
 	var tracks []webrtc.TrackLocal
+	if codec == nil {
+		return tracks
+	}
+
 	for _, source := range sources {
 		mediaStream, err := source.mediaStream(codec.CodecSelector)
 		if err != nil {

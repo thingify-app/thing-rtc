@@ -126,7 +126,10 @@ func createPeerConnection(codec *codec.Codec) (*webrtc.PeerConnection, error) {
 	settingEngine.SetICETimeouts(5*time.Second, 5*time.Second, 2*time.Second)
 
 	mediaEngine := webrtc.MediaEngine{}
-	codec.CodecSelector.Populate(&mediaEngine)
+	if codec != nil {
+		codec.CodecSelector.Populate(&mediaEngine)
+	}
+
 	api := webrtc.NewAPI(
 		webrtc.WithMediaEngine(&mediaEngine),
 		webrtc.WithSettingEngine(settingEngine),
@@ -169,7 +172,10 @@ func (p *peerTask) setupCommon() {
 
 func (p *peerTask) setupInitiator() {
 	p.server.OnPeerConnect(func() {
-		p.peerConnection.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo)
+		if p.codec != nil {
+			p.peerConnection.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo)
+		}
+
 		offer, err := p.peerConnection.CreateOffer(nil)
 		if err != nil {
 
