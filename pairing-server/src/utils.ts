@@ -13,6 +13,7 @@ export function generatePairingId(): string {
     return nanoid();
 }
 
+// TODO: make this reject with a useful "timeout" message.
 const realTimeout = function (millis: number): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         setTimeout(reject, millis);

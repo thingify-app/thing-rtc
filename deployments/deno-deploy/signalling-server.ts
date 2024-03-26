@@ -14,7 +14,11 @@ export class SignallingServer {
         const connection: Connection = {
             // TODO: handle case where sendMessage is called after disconnect.
             disconnect: () => ws.close(),
-            sendMessage: message => ws.send(message)
+            sendMessage: message => {
+                if (ws.readyState === 1) {
+                    ws.send(message);
+                }
+            }
         };
     
         this.server.onConnection(connection);

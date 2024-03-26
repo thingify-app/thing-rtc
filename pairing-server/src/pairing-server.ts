@@ -4,7 +4,7 @@ import { ConnectionChannelFactory } from './connection-channel';
 import { generatePairingId, generateShortcode, realTimeoutWrapper, TimeoutWrapper } from './utils';
 
 const EXPIRY_MILLIS = 60*1000;
-const RESPONSE_TIMEOUT = 2000;
+const RESPONSE_TIMEOUT = 10_000;
 
 export class PairingServer {
 
