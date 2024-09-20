@@ -9,7 +9,7 @@ import (
 	"github.com/urfave/cli/v2"
 
 	thingrtc "github.com/thingify-app/thing-rtc-go"
-	"github.com/thingify-app/thing-rtc-go/codec/openh264"
+	"github.com/thingify-app/thing-rtc-go/codec/vp9"
 	"github.com/thingify-app/thing-rtc-go/pairing"
 
 	_ "github.com/pion/mediadevices/pkg/driver/videotest"
@@ -172,7 +172,7 @@ func clearPairings() error {
 
 func connect(pairingId string) {
 	videoSource := thingrtc.CreateVideoMediaSource(640, 480)
-	codec, err := openh264.NewCodec(1_000_000)
+	codec, err := vp9.NewCodec(500_000)
 	if err != nil {
 		panic(err)
 	}
