@@ -171,13 +171,13 @@ func clearPairings() error {
 }
 
 func connect(pairingId string) {
-	videoSource := thingrtc.CreateVideoMediaSource(640, 480)
 	codec, err := x264.NewCodec(500_000)
 	if err != nil {
 		panic(err)
 	}
+	videoSource := thingrtc.CreateVideoMediaSource(codec, 640, 480)
 
-	peer := thingrtc.NewPeerWithMedia(SIGNALLING_SERVER_URL, codec, videoSource)
+	peer := thingrtc.NewPeerWithMedia(SIGNALLING_SERVER_URL, videoSource)
 
 	peer.OnConnectionStateChange(func(connectionState int) {
 		switch connectionState {

@@ -22,16 +22,15 @@ type Peer interface {
 }
 
 func NewPeer(serverUrl string) Peer {
-	return NewPeerWithMedia(serverUrl, nil)
+	return NewPeerWithMedia(serverUrl)
 }
 
-func NewPeerWithMedia(serverUrl string, codec *codec.Codec, sources ...MediaSource) Peer {
+func NewPeerWithMedia(serverUrl string, sources ...MediaSource) Peer {
 	// Only map sources to tracks once at initialisation - otherwise we break Pion driver state.
-	tracks := sourcesToTracks(codec, sources)
-
+	codecs, tracks := sourcesToCodecsTracks(sources)
 	return &peerImpl{
 		serverUrl: serverUrl,
-		codec:     codec,
+		codecs:    codecs,
 		tracks:    tracks,
 
 		// Initialise listeners as empty functions to allow them to be optional.
@@ -42,27 +41,27 @@ func NewPeerWithMedia(serverUrl string, codec *codec.Codec, sources ...MediaSour
 	}
 }
 
-func sourcesToTracks(codec *codec.Codec, sources []MediaSource) []webrtc.TrackLocal {
+func sourcesToCodecsTracks(sources []MediaSource) ([]*codec.Codec, []webrtc.TrackLocal) {
+	var codecs []*codec.Codec
 	var tracks []webrtc.TrackLocal
-	if codec == nil {
-		return tracks
-	}
 
 	for _, source := range sources {
-		mediaStream, err := source.mediaStream(codec.CodecSelector)
+		sourceTracks, err := source.tracks()
 		if err != nil {
 			panic(err)
 		}
-		for _, track := range mediaStream.GetTracks() {
-			tracks = append(tracks, track)
+		tracks = append(tracks, sourceTracks...)
+
+		if source.codec != nil {
+			codecs = append(codecs, source.codec)
 		}
 	}
-	return tracks
+	return codecs, tracks
 }
 
 type peerImpl struct {
 	serverUrl string
-	codec     *codec.Codec
+	codecs    []*codec.Codec
 	tracks    []webrtc.TrackLocal
 
 	peerTask  *peerTask
@@ -93,7 +92,7 @@ func (p *peerImpl) Connect(tokenGenerator TokenGenerator) {
 				attempts++
 				p.peerTask = &peerTask{
 					serverUrl: p.serverUrl,
-					codec:     p.codec,
+					codecs:    p.codecs,
 					tracks:    p.tracks,
 					// Wrap listeners so they can be dynamically updated, and run them in goroutines in case they block.
 					connectionStateListener: func(connectionState int) { go p.connectionStateListener(connectionState) },

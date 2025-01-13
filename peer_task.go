@@ -12,7 +12,7 @@ import (
 
 type peerTask struct {
 	serverUrl string
-	codec     *codec.Codec
+	codecs    []*codec.Codec
 	tracks    []webrtc.TrackLocal
 
 	server         *SignallingServer
@@ -33,7 +33,7 @@ func (p *peerTask) AttemptConnect(tokenGenerator TokenGenerator) error {
 	peerConnectionSuccess := make(chan interface{})
 
 	server := NewSignallingServer(p.serverUrl, tokenGenerator)
-	peerConnection, err := createPeerConnection(p.codec)
+	peerConnection, err := createPeerConnection(p.codecs)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func (p *peerTask) Disconnect() {
 	p.dataChannel = nil
 }
 
-func createPeerConnection(codec *codec.Codec) (*webrtc.PeerConnection, error) {
+func createPeerConnection(codecs []*codec.Codec) (*webrtc.PeerConnection, error) {
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
@@ -126,7 +126,7 @@ func createPeerConnection(codec *codec.Codec) (*webrtc.PeerConnection, error) {
 	settingEngine.SetICETimeouts(5*time.Second, 5*time.Second, 2*time.Second)
 
 	mediaEngine := webrtc.MediaEngine{}
-	if codec != nil {
+	for _, codec := range codecs {
 		codec.CodecSelector.Populate(&mediaEngine)
 	}
 
@@ -172,7 +172,7 @@ func (p *peerTask) setupCommon() {
 
 func (p *peerTask) setupInitiator() {
 	p.server.OnPeerConnect(func() {
-		if p.codec != nil {
+		if len(p.codecs) > 0 {
 			p.peerConnection.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo)
 		}
 
