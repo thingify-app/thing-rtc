@@ -177,7 +177,10 @@ func connect(pairingId string) {
 	}
 	videoSource := thingrtc.CreateVideoMediaSource(codec, 640, 480)
 
-	peer := thingrtc.NewPeerWithMedia(SIGNALLING_SERVER_URL, videoSource)
+	peer, err := thingrtc.NewPeerWithMedia(SIGNALLING_SERVER_URL, videoSource)
+	if err != nil {
+		panic(err)
+	}
 
 	peer.OnConnectionStateChange(func(connectionState int) {
 		switch connectionState {

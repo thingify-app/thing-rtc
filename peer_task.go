@@ -77,7 +77,9 @@ func (p *peerTask) AttemptConnect(tokenGenerator TokenGenerator) error {
 	case <-serverFailed:
 		p.Disconnect()
 	case <-peerConnectionFailed:
-		p.Disconnect()
+		// Only disconnect from the server if the peer failed (don't try to disconnect the peer).
+		server.Disconnect()
+		p.server = nil
 	}
 
 	p.connectionStateListener(Disconnected)
@@ -128,7 +130,10 @@ func createPeerConnection(codecs []*codec.Codec) (*webrtc.PeerConnection, error)
 	mediaEngine := webrtc.MediaEngine{}
 	// Need to register defaults in case we have no codecs specified (i.e. we
 	// are using RTSP where the encoder is remote).
-	mediaEngine.RegisterDefaultCodecs()
+	err := mediaEngine.RegisterDefaultCodecs()
+	if err != nil {
+		return nil, err
+	}
 	for _, codec := range codecs {
 		codec.CodecSelector.Populate(&mediaEngine)
 	}
@@ -141,7 +146,10 @@ func createPeerConnection(codecs []*codec.Codec) (*webrtc.PeerConnection, error)
 }
 
 func (p *peerTask) setupListeners(role string) error {
-	p.setupCommon()
+	err := p.setupCommon()
+	if err != nil {
+		return err
+	}
 
 	switch role {
 	case "initiator":
@@ -149,13 +157,13 @@ func (p *peerTask) setupListeners(role string) error {
 	case "responder":
 		p.setupResponder()
 	default:
-		return errors.New("Invalid role provided.")
+		return errors.New("invalid role provided")
 	}
 
 	return nil
 }
 
-func (p *peerTask) setupCommon() {
+func (p *peerTask) setupCommon() error {
 	p.peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate != nil && p.server != nil {
 			p.server.SendIceCandidate(candidate.ToJSON())
@@ -163,14 +171,21 @@ func (p *peerTask) setupCommon() {
 	})
 
 	p.server.OnIceCandidate(func(candidate webrtc.ICECandidateInit) {
-		p.peerConnection.AddICECandidate(candidate)
+		err := p.peerConnection.AddICECandidate(candidate)
+		if err != nil {
+			p.errorListener(err)
+		}
 	})
 
 	p.server.OnPeerDisconnect(func() {})
 
 	for _, track := range p.tracks {
-		p.peerConnection.AddTrack(track)
+		_, err := p.peerConnection.AddTrack(track)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (p *peerTask) setupInitiator() {
@@ -181,31 +196,52 @@ func (p *peerTask) setupInitiator() {
 
 		offer, err := p.peerConnection.CreateOffer(nil)
 		if err != nil {
-			panic(err)
+			p.errorListener(err)
+			return
 		}
-		p.peerConnection.SetLocalDescription(offer)
+		err = p.peerConnection.SetLocalDescription(offer)
+		if err != nil {
+			p.errorListener(err)
+			return
+		}
 		p.server.SendOffer(offer)
 	})
 
 	p.server.OnAnswer(func(answer webrtc.SessionDescription) {
-		p.peerConnection.SetRemoteDescription(answer)
+		err := p.peerConnection.SetRemoteDescription(answer)
+		if err != nil {
+			p.errorListener(err)
+		}
 	})
 
 	dataChannel, err := p.peerConnection.CreateDataChannel("dataChannel", nil)
-	if err == nil {
-		p.dataChannel = dataChannel
-		dataChannel.OnMessage(p.handleDataChannelMessage)
+	if err != nil {
+		p.errorListener(err)
+		return
 	}
+
+	p.dataChannel = dataChannel
+	dataChannel.OnMessage(p.handleDataChannelMessage)
 }
 
 func (p *peerTask) setupResponder() {
 	p.server.OnOffer(func(offer webrtc.SessionDescription) {
-		p.peerConnection.SetRemoteDescription(offer)
+		err := p.peerConnection.SetRemoteDescription(offer)
+		if err != nil {
+			p.errorListener(err)
+			return
+		}
 
 		answer, err := p.peerConnection.CreateAnswer(nil)
 		if err != nil {
+			p.errorListener(err)
+			return
 		}
-		p.peerConnection.SetLocalDescription(answer)
+		err = p.peerConnection.SetLocalDescription(answer)
+		if err != nil {
+			p.errorListener(err)
+			return
+		}
 		p.server.SendAnswer(answer)
 	})
 

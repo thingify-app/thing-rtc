@@ -2,6 +2,7 @@ package thingrtc
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/pion/webrtc/v3"
 	"github.com/thingify-app/thing-rtc-go/codec"
@@ -21,13 +22,16 @@ type Peer interface {
 	SendBinaryMessage(message []byte)
 }
 
-func NewPeer(serverUrl string) Peer {
+func NewPeer(serverUrl string) (Peer, error) {
 	return NewPeerWithMedia(serverUrl)
 }
 
-func NewPeerWithMedia(serverUrl string, sources ...MediaSource) Peer {
+func NewPeerWithMedia(serverUrl string, sources ...MediaSource) (Peer, error) {
 	// Only map sources to tracks once at initialisation - otherwise we break Pion driver state.
-	codecs, tracks := sourcesToCodecsTracks(sources)
+	codecs, tracks, err := sourcesToCodecsTracks(sources)
+	if err != nil {
+		return nil, err
+	}
 	return &peerImpl{
 		serverUrl: serverUrl,
 		codecs:    codecs,
@@ -38,17 +42,17 @@ func NewPeerWithMedia(serverUrl string, sources ...MediaSource) Peer {
 		stringMessageListener:   func(message string) {},
 		binaryMessageListener:   func(message []byte) {},
 		errorListener:           func(err error) {},
-	}
+	}, nil
 }
 
-func sourcesToCodecsTracks(sources []MediaSource) ([]*codec.Codec, []webrtc.TrackLocal) {
+func sourcesToCodecsTracks(sources []MediaSource) ([]*codec.Codec, []webrtc.TrackLocal, error) {
 	var codecs []*codec.Codec
 	var tracks []webrtc.TrackLocal
 
 	for _, source := range sources {
 		sourceTracks, err := source.tracks()
 		if err != nil {
-			panic(err)
+			return nil, nil, err
 		}
 		tracks = append(tracks, sourceTracks...)
 
@@ -56,7 +60,7 @@ func sourcesToCodecsTracks(sources []MediaSource) ([]*codec.Codec, []webrtc.Trac
 			codecs = append(codecs, source.codec)
 		}
 	}
-	return codecs, tracks
+	return codecs, tracks, nil
 }
 
 type peerImpl struct {
@@ -102,8 +106,9 @@ func (p *peerImpl) Connect(tokenGenerator TokenGenerator) {
 				}
 				err := p.peerTask.AttemptConnect(tokenGenerator)
 				if err != nil {
-					panic(err)
+					p.errorListener(err)
 				}
+				time.Sleep(time.Second)
 			}
 		}()
 	}
