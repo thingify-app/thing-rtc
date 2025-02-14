@@ -6,11 +6,12 @@ import (
 
 	"github.com/pion/webrtc/v3"
 	"github.com/thingify-app/thing-rtc-go/codec"
+	"github.com/thingify-app/thing-rtc-go/pairing"
 )
 
 // Peer represents a connection (attempted or actual) to a ThingRTC peer.
 type Peer interface {
-	Connect(tokenGenerator TokenGenerator)
+	Connect()
 	Disconnect()
 
 	OnConnectionStateChange(f func(connectionState int))
@@ -22,51 +23,46 @@ type Peer interface {
 	SendBinaryMessage(message []byte)
 }
 
-func NewPeer(serverUrl string) (Peer, error) {
-	return NewPeerWithMedia(serverUrl)
+func NewPeer(serverUrl string, tokenGenerator pairing.TokenGenerator) Peer {
+	return NewPeerWithMedia(serverUrl, tokenGenerator)
 }
 
-func NewPeerWithMedia(serverUrl string, sources ...MediaSource) (Peer, error) {
+func NewPeerWithMedia(serverUrl string, tokenGenerator pairing.TokenGenerator, sources ...*MediaSource) Peer {
 	// Only map sources to tracks once at initialisation - otherwise we break Pion driver state.
-	codecs, tracks, err := sourcesToCodecsTracks(sources)
-	if err != nil {
-		return nil, err
-	}
+	codecs, tracks := sourcesToCodecsTracks(sources)
 	return &peerImpl{
-		serverUrl: serverUrl,
-		codecs:    codecs,
-		tracks:    tracks,
+		serverUrl:      serverUrl,
+		tokenGenerator: tokenGenerator,
+		codecs:         codecs,
+		tracks:         tracks,
 
 		// Initialise listeners as empty functions to allow them to be optional.
 		connectionStateListener: func(connectionState int) {},
 		stringMessageListener:   func(message string) {},
 		binaryMessageListener:   func(message []byte) {},
 		errorListener:           func(err error) {},
-	}, nil
+	}
 }
 
-func sourcesToCodecsTracks(sources []MediaSource) ([]*codec.Codec, []webrtc.TrackLocal, error) {
+func sourcesToCodecsTracks(sources []*MediaSource) ([]*codec.Codec, []webrtc.TrackLocal) {
 	var codecs []*codec.Codec
 	var tracks []webrtc.TrackLocal
 
 	for _, source := range sources {
-		sourceTracks, err := source.tracks()
-		if err != nil {
-			return nil, nil, err
-		}
-		tracks = append(tracks, sourceTracks...)
+		tracks = append(tracks, source.tracks...)
 
 		if source.codec != nil {
 			codecs = append(codecs, source.codec)
 		}
 	}
-	return codecs, tracks, nil
+	return codecs, tracks
 }
 
 type peerImpl struct {
-	serverUrl string
-	codecs    []*codec.Codec
-	tracks    []webrtc.TrackLocal
+	serverUrl      string
+	tokenGenerator pairing.TokenGenerator
+	codecs         []*codec.Codec
+	tracks         []webrtc.TrackLocal
 
 	peerTask  *peerTask
 	connected bool
@@ -84,7 +80,7 @@ const (
 	Connected
 )
 
-func (p *peerImpl) Connect(tokenGenerator TokenGenerator) {
+func (p *peerImpl) Connect() {
 	// No-op if we're already connecting/connected.
 	if !p.connected {
 		p.connected = true
@@ -104,7 +100,7 @@ func (p *peerImpl) Connect(tokenGenerator TokenGenerator) {
 					binaryMessageListener:   func(message []byte) { go p.binaryMessageListener(message) },
 					errorListener:           func(err error) { go p.errorListener(err) },
 				}
-				err := p.peerTask.AttemptConnect(tokenGenerator)
+				err := p.peerTask.AttemptConnect(p.tokenGenerator)
 				if err != nil {
 					p.errorListener(err)
 				}

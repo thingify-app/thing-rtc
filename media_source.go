@@ -19,34 +19,30 @@ import (
 )
 
 type MediaSource struct {
-	tracks func() ([]webrtc.TrackLocal, error)
+	tracks []webrtc.TrackLocal
 	codec  *codec.Codec
 }
 
-func CreateVideoMediaSource(codec *codec.Codec, width, height int) MediaSource {
-	return MediaSource{
-		tracks: func() ([]webrtc.TrackLocal, error) {
-			track, err := createVideoTrack(codec, width, height)
-			if err != nil {
-				return nil, err
-			}
-			return []webrtc.TrackLocal{track}, nil
-		},
-		codec: codec,
+func CreateVideoMediaSource(codec *codec.Codec, width, height int) (*MediaSource, error) {
+	track, err := createVideoTrack(codec, width, height)
+	if err != nil {
+		return nil, err
 	}
+	return &MediaSource{
+		tracks: []webrtc.TrackLocal{track},
+		codec:  codec,
+	}, nil
 }
 
-func CreateRtspMediaSource(rtspUrl string) MediaSource {
-	return MediaSource{
-		tracks: func() ([]webrtc.TrackLocal, error) {
-			track, err := createRtspTrack(rtspUrl)
-			if err != nil {
-				return nil, err
-			}
-			return []webrtc.TrackLocal{track}, nil
-		},
-		codec: nil,
+func CreateRtspMediaSource(rtspUrl string) (*MediaSource, error) {
+	track, err := createRtspTrack(rtspUrl)
+	if err != nil {
+		return nil, err
 	}
+	return &MediaSource{
+		tracks: []webrtc.TrackLocal{track},
+		codec:  nil,
+	}, nil
 }
 
 func createVideoTrack(codec *codec.Codec, width, height int) (webrtc.TrackLocal, error) {

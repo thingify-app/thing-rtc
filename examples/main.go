@@ -95,6 +95,14 @@ func main() {
 					return nil
 				},
 			},
+			{
+				Name:  "connectAll",
+				Usage: "Connect to all paired peers",
+				Action: func(ctx *cli.Context) error {
+					connectAll()
+					return nil
+				},
+			},
 		},
 	}
 
@@ -170,17 +178,38 @@ func clearPairings() error {
 	return nil
 }
 
-func connect(pairingId string) {
+func createVideoSource() *thingrtc.MediaSource {
 	codec, err := x264.NewCodec(500_000)
 	if err != nil {
 		panic(err)
 	}
-	videoSource := thingrtc.CreateVideoMediaSource(codec, 640, 480)
-
-	peer, err := thingrtc.NewPeerWithMedia(SIGNALLING_SERVER_URL, videoSource)
+	videoSource, err := thingrtc.CreateVideoMediaSource(codec, 640, 480)
 	if err != nil {
 		panic(err)
 	}
+	return videoSource
+}
+
+func connectAll() {
+	peerSet, err := thingrtc.NewPeerSet(SIGNALLING_SERVER_URL, createPairing(), createVideoSource())
+	if err != nil {
+		panic(err)
+	}
+
+	peerSet.Connect()
+	defer peerSet.Disconnect()
+
+	select {}
+}
+
+func connect(pairingId string) {
+	pairing := createPairing()
+	tokenGenerator, err := pairing.GetTokenGenerator(pairingId)
+	if err != nil {
+		panic(err)
+	}
+
+	peer := thingrtc.NewPeerWithMedia(SIGNALLING_SERVER_URL, tokenGenerator, createVideoSource())
 
 	peer.OnConnectionStateChange(func(connectionState int) {
 		switch connectionState {
@@ -205,13 +234,7 @@ func connect(pairingId string) {
 		fmt.Printf("Peer error: %v\n", err)
 	})
 
-	pairing := createPairing()
-	tokenGenerator, err := pairing.GetTokenGenerator(pairingId)
-	if err != nil {
-		panic(err)
-	}
-
-	peer.Connect(tokenGenerator)
+	peer.Connect()
 	defer peer.Disconnect()
 
 	select {}

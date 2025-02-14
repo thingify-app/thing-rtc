@@ -2,8 +2,6 @@ package pairing
 
 import (
 	"fmt"
-
-	thingrtc "github.com/thingify-app/thing-rtc-go"
 )
 
 // Pairing represents the API for initiating and responding to pairing requests.
@@ -115,7 +113,7 @@ func (p *Pairing) RespondToPairing(shortcode string) (*PairingResult, error) {
 
 // GetTokenGenerator returns a TokenGenerator to be used when signalling to a
 // paired peer given by the pairingId.
-func (p *Pairing) GetTokenGenerator(pairingId string) (thingrtc.TokenGenerator, error) {
+func (p *Pairing) GetTokenGenerator(pairingId string) (TokenGenerator, error) {
 	pairingData, err := p.pairingStorage.getPairing(pairingId)
 	if err != nil {
 		return nil, err

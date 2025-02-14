@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v3"
+	"github.com/thingify-app/thing-rtc-go/pairing"
 )
 
 type MockTokenGenerator struct {
@@ -65,7 +66,7 @@ func createWebsocketServer(actions func(conn *websocket.Conn)) *httptest.Server 
 	return httptest.NewServer(http.HandlerFunc(handler))
 }
 
-func createSignallingServer(tokenGenerator TokenGenerator, actions func(conn *websocket.Conn)) (*SignallingServer, *ServerChannels) {
+func createSignallingServer(tokenGenerator pairing.TokenGenerator, actions func(conn *websocket.Conn)) (*SignallingServer, *ServerChannels) {
 	server := createWebsocketServer(actions)
 	// SignallingServer requires a "ws://" URL rather than "http://"
 	url := strings.Replace(server.URL, "http", "ws", 1)

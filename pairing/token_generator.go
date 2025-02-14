@@ -1,4 +1,4 @@
-package thingrtc
+package pairing
 
 import (
 	"encoding/json"

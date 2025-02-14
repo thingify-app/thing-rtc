@@ -8,6 +8,7 @@ import (
 	"github.com/pion/webrtc/v3"
 
 	"github.com/thingify-app/thing-rtc-go/codec"
+	"github.com/thingify-app/thing-rtc-go/pairing"
 )
 
 type peerTask struct {
@@ -27,7 +28,7 @@ type peerTask struct {
 
 // Attempts to connect to a peer once, and blocks until the connection fails for any reason.
 // Must not be called again on the same instance.
-func (p *peerTask) AttemptConnect(tokenGenerator TokenGenerator) error {
+func (p *peerTask) AttemptConnect(tokenGenerator pairing.TokenGenerator) error {
 	serverFailed := make(chan interface{})
 	peerConnectionFailed := make(chan interface{})
 	peerConnectionSuccess := make(chan interface{})

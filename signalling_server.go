@@ -8,6 +8,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v3"
+	"github.com/thingify-app/thing-rtc-go/pairing"
 )
 
 // SignallingServer handles signalling communications to establish a connection
@@ -18,7 +19,7 @@ import (
 // will report these and return to a disconnected state.
 type SignallingServer struct {
 	URL            string
-	TokenGenerator TokenGenerator
+	TokenGenerator pairing.TokenGenerator
 
 	socket      *websocket.Conn
 	connected   bool
@@ -34,7 +35,7 @@ type SignallingServer struct {
 	errorListener          func(err error)
 }
 
-func NewSignallingServer(serverUrl string, tokenGenerator TokenGenerator) SignallingServer {
+func NewSignallingServer(serverUrl string, tokenGenerator pairing.TokenGenerator) SignallingServer {
 	return SignallingServer{
 		URL:            serverUrl,
 		TokenGenerator: tokenGenerator,
