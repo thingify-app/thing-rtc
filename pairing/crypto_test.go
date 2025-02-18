@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-var keyOperations KeyOperations = NewEcdsaKeyOperationsWithRand(zeroReader)
+var keyOperations KeyOperations = NewEcdsaKeyOperationsWithRand(onesReader)
 
 func TestPublicKeyRoundTrip(t *testing.T) {
 	// Example JWK values taken from RFC 7517.
@@ -130,10 +130,10 @@ func TestGenerateExportPublicKey(t *testing.T) {
 	if parsedKey["crv"] != "P-256" {
 		t.Errorf("Export with invalid crv: %v", parsedKey["crv"])
 	}
-	if parsedKey["x"] != "axfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpY" {
+	if parsedKey["x"] != "b_A7lJJBzh2t1DUZ5pYOCoW0GmmgXDKBA6orzhWUyhY" {
 		t.Errorf("Export with invalid x: %v", parsedKey["x"])
 	}
-	if parsedKey["y"] != "T-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU" {
+	if parsedKey["y"] != "PE91OlW_AdxT9sCwx-7ni0DG_30lqW4igrmJzvccFEo" {
 		t.Errorf("Export with invalid y: %v", parsedKey["y"])
 	}
 }
@@ -197,13 +197,13 @@ func TestGenerateExportPrivateKey(t *testing.T) {
 	if parsedKey["crv"] != "P-256" {
 		t.Errorf("Export with invalid crv: %v", parsedKey["crv"])
 	}
-	if parsedKey["x"] != "axfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpY" {
+	if parsedKey["x"] != "b_A7lJJBzh2t1DUZ5pYOCoW0GmmgXDKBA6orzhWUyhY" {
 		t.Errorf("Export with invalid x: %v", parsedKey["x"])
 	}
-	if parsedKey["y"] != "T-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU" {
+	if parsedKey["y"] != "PE91OlW_AdxT9sCwx-7ni0DG_30lqW4igrmJzvccFEo" {
 		t.Errorf("Export with invalid y: %v", parsedKey["y"])
 	}
-	if parsedKey["d"] != "AQ" {
+	if parsedKey["d"] != "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE" {
 		t.Errorf("Export with invalid d: %v", parsedKey["d"])
 	}
 }
@@ -241,15 +241,15 @@ func TestGenerateFullRoundTrip(t *testing.T) {
 }
 
 func TestGenerateNonce(t *testing.T) {
-	nonce := GenerateNonceWithRand(zeroReader)
-	if nonce != "AAAAAAAAAAAAAAAAAAAAAAAA" {
+	nonce := GenerateNonceWithRand(onesReader)
+	if nonce != "AQEBAQEBAQEBAQEBAQEBAQEB" {
 		t.Errorf("Unexpected nonce value: %v", nonce)
 	}
 }
 
 func TestSignatureEncodingPadded(t *testing.T) {
 	// Value found by iterating until we found a value which produced a non-equal length r,s pair when signing "hello".
-	constRand := constReader{161}
+	constRand := constReader{31}
 	keyOperations := NewEcdsaKeyOperationsWithRand(constRand)
 
 	keyPair, err := keyOperations.generateKeyPair()
@@ -265,8 +265,8 @@ func TestSignatureEncodingPadded(t *testing.T) {
 	}
 
 	// Value of s is expected to be padded with a zero at index zero.
-	rBytes := []byte{246, 13, 240, 206, 70, 133, 90, 117, 50, 157, 119, 14, 199, 129, 56, 112, 78, 100, 44, 197, 52, 248, 172, 8, 228, 184, 0, 121, 20, 215, 113, 82}
-	sBytes := []byte{0, 36, 25, 161, 10, 45, 84, 244, 111, 234, 38, 189, 151, 76, 222, 5, 44, 118, 71, 39, 15, 24, 234, 176, 134, 127, 105, 203, 229, 239, 86, 124}
+	rBytes := []byte{252, 192, 250, 114, 162, 172, 104, 96, 223, 157, 84, 160, 73, 142, 70, 223, 32, 57, 52, 26, 90, 10, 136, 159, 142, 225, 102, 17, 90, 246, 168, 110}
+	sBytes := []byte{0, 35, 194, 80, 208, 112, 92, 52, 233, 190, 89, 156, 98, 16, 247, 234, 3, 95, 244, 81, 133, 117, 81, 159, 156, 168, 184, 50, 2, 189, 178, 188}
 	expectedSignature := append(rBytes, sBytes...)
 
 	if !bytes.Equal(signature, expectedSignature) {

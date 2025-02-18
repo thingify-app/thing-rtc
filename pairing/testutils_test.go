@@ -13,4 +13,4 @@ func (c constReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-var zeroReader = constReader{0}
+var onesReader = constReader{1}
