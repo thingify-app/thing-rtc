@@ -129,12 +129,16 @@ func createPeerConnection(codecs []*codec.Codec) (*webrtc.PeerConnection, error)
 	settingEngine.SetICETimeouts(5*time.Second, 5*time.Second, 2*time.Second)
 
 	mediaEngine := webrtc.MediaEngine{}
-	// Need to register defaults in case we have no codecs specified (i.e. we
-	// are using RTSP where the encoder is remote).
-	err := mediaEngine.RegisterDefaultCodecs()
-	if err != nil {
-		return nil, err
+
+	if len(codecs) == 0 {
+		// Need to register defaults if we have no codecs specified (i.e. we are
+		// using RTSP where the encoder is remote).
+		err := mediaEngine.RegisterDefaultCodecs()
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	for _, codec := range codecs {
 		codec.CodecSelector.Populate(&mediaEngine)
 	}
