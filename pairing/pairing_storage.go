@@ -119,6 +119,8 @@ type storedPairingData struct {
 	RemotePublicKeyJwk string
 	LocalPublicKeyJwk  string
 	LocalPrivateKeyJwk string
+	RemoteMetadata     map[string]string
+	LocalMetadata      map[string]string
 }
 
 func createIfNotExists(filename string) (*os.File, error) {
@@ -194,6 +196,8 @@ func (s *filePairingStorage) parseFile() (pairingMap, error) {
 				PublicKey:  localPublicKey,
 				PrivateKey: localPrivateKey,
 			},
+			remoteMetadata: v.RemoteMetadata,
+			localMetadata:  v.LocalMetadata,
 		}
 	}
 
@@ -209,6 +213,8 @@ func (s *filePairingStorage) commitFile(data pairingMap) error {
 			RemotePublicKeyJwk: v.remotePublicKey.exportJwk(),
 			LocalPublicKeyJwk:  v.localKeyPair.PublicKey.exportJwk(),
 			LocalPrivateKeyJwk: v.localKeyPair.PrivateKey.exportJwk(),
+			RemoteMetadata:     v.remoteMetadata,
+			LocalMetadata:      v.localMetadata,
 		}
 	}
 

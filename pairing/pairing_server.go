@@ -23,6 +23,7 @@ type PendingPairing struct {
 
 type CompletedPairing struct {
 	initiatorPublicKey string
+	metadata           map[string]string
 	success            bool
 }
 
@@ -30,9 +31,10 @@ type InitiatorPairDetails struct {
 	pairingId          string
 	responderPublicKey string
 	initiatorToken     string
+	metadata           map[string]string
 }
 
-func (ps PairingServer) createPairingRequest(responderPublicKey string) (*PendingPairing, error) {
+func (ps PairingServer) createPairingRequest(responderPublicKey string, metadata map[string]string) (*PendingPairing, error) {
 	wsUrl, err := url.Parse(ps.baseUrl)
 	if err != nil {
 		return nil, err
@@ -51,7 +53,15 @@ func (ps PairingServer) createPairingRequest(responderPublicKey string) (*Pendin
 		return nil, err
 	}
 
-	err = conn.WriteMessage(websocket.TextMessage, []byte(responderPublicKey))
+	initialMessage, err := json.Marshal(map[string]interface{}{
+		"publicKey": responderPublicKey,
+		"metadata":  metadata,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = conn.WriteMessage(websocket.TextMessage, initialMessage)
 	if err != nil {
 		return nil, err
 	}
@@ -79,6 +89,7 @@ func (ps PairingServer) createPairingRequest(responderPublicKey string) (*Pendin
 			completedPairingData := struct {
 				Status             string
 				InitiatorPublicKey string
+				Metadata           map[string]string
 			}{}
 
 			err = conn.ReadJSON(&completedPairingData)
@@ -90,6 +101,7 @@ func (ps PairingServer) createPairingRequest(responderPublicKey string) (*Pendin
 			completedPairing := CompletedPairing{
 				success:            completedPairingData.Status == "paired",
 				initiatorPublicKey: completedPairingData.InitiatorPublicKey,
+				metadata:           completedPairingData.Metadata,
 			}
 			return &completedPairing, nil
 		},
@@ -98,7 +110,7 @@ func (ps PairingServer) createPairingRequest(responderPublicKey string) (*Pendin
 	return &pendingPairing, nil
 }
 
-func (ps PairingServer) respondToPairingRequest(shortcode, publicKeyJwk string) (*InitiatorPairDetails, error) {
+func (ps PairingServer) respondToPairingRequest(shortcode, publicKeyJwk string, metadata map[string]string) (*InitiatorPairDetails, error) {
 	apiUrl, err := url.Parse(ps.baseUrl)
 	if err != nil {
 		return nil, err
@@ -106,8 +118,9 @@ func (ps PairingServer) respondToPairingRequest(shortcode, publicKeyJwk string) 
 
 	apiUrl.Path = apiUrl.Path + "/respondToPairing/" + shortcode
 
-	postBody, _ := json.Marshal(map[string]string{
+	postBody, _ := json.Marshal(map[string]interface{}{
 		"publicKey": publicKeyJwk,
+		"metadata":  metadata,
 	})
 
 	resp, err := http.Post(apiUrl.String(), "application/json", bytes.NewBuffer(postBody))
@@ -120,6 +133,7 @@ func (ps PairingServer) respondToPairingRequest(shortcode, publicKeyJwk string) 
 		PairingId          string
 		ResponderPublicKey string
 		InitiatorToken     string
+		Metadata           map[string]string
 	}{}
 
 	decoder := json.NewDecoder(resp.Body)
@@ -132,6 +146,7 @@ func (ps PairingServer) respondToPairingRequest(shortcode, publicKeyJwk string) 
 		pairingId:          pairDetailsResponse.PairingId,
 		responderPublicKey: pairDetailsResponse.ResponderPublicKey,
 		initiatorToken:     pairDetailsResponse.InitiatorToken,
+		metadata:           pairDetailsResponse.Metadata,
 	}
 
 	return &pairDetails, nil

@@ -19,7 +19,9 @@ type PendingPairingResult struct {
 
 // Represents a complete, successful pairing result.
 type PairingResult struct {
-	PairingId string
+	PairingId      string
+	LocalMetadata  map[string]string
+	RemoteMetadata map[string]string
 }
 
 // Create a Pairing API object referring to a pairing server at baseUrl.
@@ -34,13 +36,17 @@ func NewPairing(baseUrl string, pairingFilename string) Pairing {
 // InitiatePairing creates a pairing request, resulting in a shortcode which
 // must be provided to the peer.
 func (p *Pairing) InitiatePairing() (*PendingPairingResult, error) {
+	return p.InitiatePairingWithMetadata(make(map[string]string))
+}
+
+func (p *Pairing) InitiatePairingWithMetadata(metadata map[string]string) (*PendingPairingResult, error) {
 	localKeyPair, err := p.keyOperations.generateKeyPair()
 	if err != nil {
 		return nil, fmt.Errorf("generating keypair failed: %w", err)
 	}
 
 	publicKeyJwk := localKeyPair.PublicKey.exportJwk()
-	pendingPairing, err := p.pairingServer.createPairingRequest(publicKeyJwk)
+	pendingPairing, err := p.pairingServer.createPairingRequest(publicKeyJwk, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("creating pairing request failed: %w", err)
 	}
@@ -64,13 +70,17 @@ func (p *Pairing) InitiatePairing() (*PendingPairingResult, error) {
 				serverToken:     pendingPairing.token,
 				remotePublicKey: remotePublicKey,
 				localKeyPair:    localKeyPair,
+				remoteMetadata:  completedPairing.metadata,
+				localMetadata:   metadata,
 			})
 			if err != nil {
 				return nil, err
 			}
 
 			return &PairingResult{
-				PairingId: pendingPairing.pairingId,
+				PairingId:      pendingPairing.pairingId,
+				LocalMetadata:  metadata,
+				RemoteMetadata: completedPairing.metadata,
 			}, nil
 		},
 	}, nil
@@ -79,13 +89,17 @@ func (p *Pairing) InitiatePairing() (*PendingPairingResult, error) {
 // RespondToPairing take a shortcode created by the initiating peer, and
 // completes the pairing request with exchange of details with this peer.
 func (p *Pairing) RespondToPairing(shortcode string) (*PairingResult, error) {
+	return p.RespondToPairingWithMetadata(shortcode, make(map[string]string))
+}
+
+func (p *Pairing) RespondToPairingWithMetadata(shortcode string, metadata map[string]string) (*PairingResult, error) {
 	localKeyPair, err := p.keyOperations.generateKeyPair()
 	if err != nil {
 		return nil, fmt.Errorf("generating keypair failed: %w", err)
 	}
 
 	publicKeyJwk := localKeyPair.PublicKey.exportJwk()
-	pairDetails, err := p.pairingServer.respondToPairingRequest(shortcode, publicKeyJwk)
+	pairDetails, err := p.pairingServer.respondToPairingRequest(shortcode, publicKeyJwk, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("responding to pairing request failed: %w", err)
 	}
@@ -101,13 +115,17 @@ func (p *Pairing) RespondToPairing(shortcode string) (*PairingResult, error) {
 		serverToken:     pairDetails.initiatorToken,
 		remotePublicKey: remotePublicKey,
 		localKeyPair:    localKeyPair,
+		remoteMetadata:  pairDetails.metadata,
+		localMetadata:   metadata,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &PairingResult{
-		PairingId: pairDetails.pairingId,
+		PairingId:      pairDetails.pairingId,
+		LocalMetadata:  metadata,
+		RemoteMetadata: pairDetails.metadata,
 	}, nil
 }
 
@@ -124,6 +142,22 @@ func (p *Pairing) GetTokenGenerator(pairingId string) (TokenGenerator, error) {
 
 func (p *Pairing) GetAllPairingIds() []string {
 	return p.pairingStorage.getAllPairingIds()
+}
+
+func (p *Pairing) GetAllPairings() ([]*PairingResult, error) {
+	var results []*PairingResult
+	for _, id := range p.pairingStorage.getAllPairingIds() {
+		pairing, err := p.pairingStorage.getPairing(id)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, &PairingResult{
+			PairingId:      id,
+			LocalMetadata:  pairing.localMetadata,
+			RemoteMetadata: pairing.remoteMetadata,
+		})
+	}
+	return results, nil
 }
 
 func (p *Pairing) DeletePairing(pairingId string) {

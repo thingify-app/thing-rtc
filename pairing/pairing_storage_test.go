@@ -5,13 +5,13 @@ import (
 	"testing"
 )
 
-func createFilePairingStorage() PairingStorage {
+func createFilePairingStorage() (PairingStorage, *os.File) {
 	file, err := os.CreateTemp("", "thingrtc_pairing_storage_test_*.json")
 	if err != nil {
 		panic(err)
 	}
 
-	return NewFilePairingStorage(file.Name())
+	return NewFilePairingStorage(file.Name()), file
 }
 
 func createPairingData(pairingId string) pairingData {
@@ -31,11 +31,13 @@ func createPairingData(pairingId string) pairingData {
 		serverToken:     "testServerToken",
 		remotePublicKey: remoteKeyPair.PublicKey,
 		localKeyPair:    localKeyPair,
+		remoteMetadata:  map[string]string{"foo": "bar"},
+		localMetadata:   map[string]string{"baz": "bat"},
 	}
 }
 
 func TestFileStorageEmpty(t *testing.T) {
-	pairingStorage := createFilePairingStorage()
+	pairingStorage, _ := createFilePairingStorage()
 	pairingIds := pairingStorage.getAllPairingIds()
 
 	if len(pairingIds) != 0 {
@@ -44,7 +46,7 @@ func TestFileStorageEmpty(t *testing.T) {
 }
 
 func TestFileStorageOneEntry(t *testing.T) {
-	pairingStorage := createFilePairingStorage()
+	pairingStorage, _ := createFilePairingStorage()
 	pairingData := createPairingData("testPairing123")
 
 	err := pairingStorage.savePairing(pairingData)
@@ -66,7 +68,7 @@ func TestFileStorageOneEntry(t *testing.T) {
 }
 
 func TestFileRoundTrip(t *testing.T) {
-	pairingStorage := createFilePairingStorage()
+	pairingStorage, _ := createFilePairingStorage()
 	pairingData := createPairingData("testPairing123")
 
 	err := pairingStorage.savePairing(pairingData)
@@ -84,10 +86,61 @@ func TestFileRoundTrip(t *testing.T) {
 	if savedPairingData.pairingId != "testPairing123" {
 		t.Errorf("Incorrect pairingId: %v", savedPairingData.pairingId)
 	}
+	if savedPairingData.localMetadata["baz"] != "bat" {
+		t.Errorf("Incorrect metadata: %v", savedPairingData.localMetadata)
+	}
+	if savedPairingData.remoteMetadata["foo"] != "bar" {
+		t.Errorf("Incorrect metadata: %v", savedPairingData.remoteMetadata)
+	}
+}
+
+func TestInvalidMetadata(t *testing.T) {
+	pairingStorage, file := createFilePairingStorage()
+	file.WriteString("{}a")
+
+	pairingStorage.getAllPairingIds()
+}
+
+func TestMissingMetadata(t *testing.T) {
+	pairingStorage, _ := createFilePairingStorage()
+
+	keyOperations := NewEcdsaKeyOperationsWithRand(onesReader)
+	remoteKeyPair, err := keyOperations.generateKeyPair()
+	if err != nil {
+		panic(err)
+	}
+	localKeyPair, err := keyOperations.generateKeyPair()
+	if err != nil {
+		panic(err)
+	}
+
+	pairingData := pairingData{
+		pairingId:       "testPairing123",
+		role:            "initiator",
+		serverToken:     "testServerToken",
+		remotePublicKey: remoteKeyPair.PublicKey,
+		localKeyPair:    localKeyPair,
+	}
+
+	err = pairingStorage.savePairing(pairingData)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	savedPairingData, err := pairingStorage.getPairing("testPairing123")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if savedPairingData.remoteMetadata != nil {
+		t.Errorf("nil metadata")
+	}
 }
 
 func TestFileDelete(t *testing.T) {
-	pairingStorage := createFilePairingStorage()
+	pairingStorage, _ := createFilePairingStorage()
 	pairingData := createPairingData("testPairing123")
 
 	err := pairingStorage.savePairing(pairingData)
@@ -104,7 +157,7 @@ func TestFileDelete(t *testing.T) {
 }
 
 func TestFileClearing(t *testing.T) {
-	pairingStorage := createFilePairingStorage()
+	pairingStorage, _ := createFilePairingStorage()
 	pairingData := createPairingData("testPairing123")
 
 	err := pairingStorage.savePairing(pairingData)
@@ -122,7 +175,7 @@ func TestFileClearing(t *testing.T) {
 }
 
 func TestGetNonExistentPairingId(t *testing.T) {
-	pairingStorage := createFilePairingStorage()
+	pairingStorage, _ := createFilePairingStorage()
 	pairingData := createPairingData("testPairing123")
 
 	err := pairingStorage.savePairing(pairingData)
@@ -138,7 +191,7 @@ func TestGetNonExistentPairingId(t *testing.T) {
 }
 
 func TestDeleteNonExistentPairingId(t *testing.T) {
-	pairingStorage := createFilePairingStorage()
+	pairingStorage, _ := createFilePairingStorage()
 
 	// Just expect no panic
 	pairingStorage.deletePairing("testPairing123")

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -21,6 +22,13 @@ const PAIRING_SERVER_URL = "https://thingify.deno.dev/pairing"
 const SIGNALLING_SERVER_URL = "wss://thingify.deno.dev/signalling"
 
 func main() {
+	metadataFlag := &cli.StringFlag{
+		Name:     "metadata",
+		Usage:    "JSON-formatted metadata consisting of string keys and values",
+		Required: false,
+		Value:    "{}",
+	}
+
 	app := &cli.App{
 		Name:  "thingrtc",
 		Usage: "Explore thingrtc",
@@ -32,8 +40,11 @@ func main() {
 					{
 						Name:  "initiate",
 						Usage: "Initiate a pairing request",
+						Flags: []cli.Flag{
+							metadataFlag,
+						},
 						Action: func(ctx *cli.Context) error {
-							return initiatePairing()
+							return initiatePairing(ctx.String("metadata"))
 						},
 					},
 					{
@@ -45,9 +56,10 @@ func main() {
 								Usage:    "shortcode provided by initiating peer",
 								Required: true,
 							},
+							metadataFlag,
 						},
 						Action: func(ctx *cli.Context) error {
-							return respondToPairing(ctx.String("shortcode"))
+							return respondToPairing(ctx.String("shortcode"), ctx.String("metadata"))
 						},
 					},
 					{
@@ -127,11 +139,25 @@ func createPairing() pairing.Pairing {
 	return pairing.NewPairing(PAIRING_SERVER_URL, path.Join(configDir, "pairing.json"))
 }
 
-func initiatePairing() error {
+func parseMetadata(metadata string) (map[string]string, error) {
+	var result map[string]string
+	err := json.Unmarshal([]byte(metadata), &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func initiatePairing(metadata string) error {
 	pairing := createPairing()
 
+	parsedMetadata, err := parseMetadata(metadata)
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("Creating pairing request...\n")
-	pendingResult, err := pairing.InitiatePairing()
+	pendingResult, err := pairing.InitiatePairingWithMetadata(parsedMetadata)
 	if err != nil {
 		return err
 	}
@@ -147,11 +173,16 @@ func initiatePairing() error {
 	return nil
 }
 
-func respondToPairing(shortcode string) error {
+func respondToPairing(shortcode string, metadata string) error {
 	pairing := createPairing()
 
+	parsedMetadata, err := parseMetadata(metadata)
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("Responding to pairing...\n")
-	result, err := pairing.RespondToPairing(shortcode)
+	result, err := pairing.RespondToPairingWithMetadata(shortcode, parsedMetadata)
 	if err != nil {
 		return err
 	}
@@ -162,7 +193,13 @@ func respondToPairing(shortcode string) error {
 
 func listPairings() error {
 	pairing := createPairing()
-	fmt.Printf("All pairings:\n%v\n", pairing.GetAllPairingIds())
+	pairings, err := pairing.GetAllPairings()
+	if err != nil {
+		return err
+	}
+	for _, p := range pairings {
+		fmt.Printf("Pairing: %v\nLocal metadata: %v\nRemote metadata: %v\n\n", p.PairingId, p.LocalMetadata, p.RemoteMetadata)
+	}
 	return nil
 }
 

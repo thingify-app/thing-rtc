@@ -31,7 +31,13 @@ func createPairingServer(actions func(conn *websocket.Conn)) PairingServer {
 
 func TestCreatePairingRequest(t *testing.T) {
 	actions := func(conn *websocket.Conn) {
-		conn.ReadMessage()
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			panic(err)
+		}
+		if string(msg) != `{"metadata":{"localFoo":"localBar"},"publicKey":"myToken"}` {
+			panic(string(msg))
+		}
 		conn.WriteMessage(websocket.TextMessage, []byte(`
 		{
 			"pairingId": "abc123",
@@ -42,12 +48,16 @@ func TestCreatePairingRequest(t *testing.T) {
 		conn.WriteMessage(websocket.TextMessage, []byte(`
 		{
 			"status": "paired",
+			"metadata": {"foo": "bar"},
 			"initiatorPublicKey": "publicKey"
 		}`))
 	}
 
 	pairingServer := createPairingServer(actions)
-	pendingPairing, err := pairingServer.createPairingRequest("myToken")
+	metadata := map[string]string{
+		"localFoo": "localBar",
+	}
+	pendingPairing, err := pairingServer.createPairingRequest("myToken", metadata)
 
 	if err != nil {
 		t.Error(err)
@@ -80,6 +90,10 @@ func TestCreatePairingRequest(t *testing.T) {
 	if completedPairing.initiatorPublicKey != "publicKey" {
 		t.Errorf("Incorrect public key: %v.", completedPairing.initiatorPublicKey)
 	}
+
+	if completedPairing.metadata["foo"] != "bar" {
+		t.Errorf("Incorrect metadata: %v.", completedPairing.metadata)
+	}
 }
 
 func TestRespondToPairingRequest(t *testing.T) {
@@ -92,26 +106,36 @@ func TestRespondToPairingRequest(t *testing.T) {
 			t.Errorf("Incorrect shortcode received: %v", requestUrl.Path)
 		}
 
-		body := make(map[string]string)
+		body := struct {
+			PublicKey string
+			Metadata  map[string]string
+		}{}
 		err := json.NewDecoder(r.Body).Decode(&body)
 		if err != nil {
 			t.Error(err)
 			return
 		}
-		if body["publicKey"] != "myJwk" {
+		if body.PublicKey != "myJwk" {
 			t.Errorf("Invalid body received: %v", body)
+		}
+		if body.Metadata["localFoo"] != "localBar" {
+			t.Errorf("Invalid metadata received: %v", body)
 		}
 
 		w.Write([]byte(`
 		{
 			"pairingId": "abc123",
 			"responderPublicKey": "publicKey",
-			"initiatorToken": "token123"
+			"initiatorToken": "token123",
+			"metadata": {"foo": "bar"}
 		}`))
 	}
 	server := httptest.NewServer(http.HandlerFunc(handler))
 	pairingServer := PairingServer{baseUrl: server.URL}
-	pairDetails, err := pairingServer.respondToPairingRequest("ABC123", "myJwk")
+	metadata := map[string]string{
+		"localFoo": "localBar",
+	}
+	pairDetails, err := pairingServer.respondToPairingRequest("ABC123", "myJwk", metadata)
 
 	if err != nil {
 		t.Error(err)
@@ -126,6 +150,9 @@ func TestRespondToPairingRequest(t *testing.T) {
 	}
 	if pairDetails.initiatorToken != "token123" {
 		t.Errorf("Incorrect initiatorToken: %v.", pairDetails.initiatorToken)
+	}
+	if pairDetails.metadata["foo"] != "bar" {
+		t.Errorf("Incorrect metadata: %v.", pairDetails.metadata)
 	}
 }
 
@@ -148,7 +175,7 @@ func TestRespondToPairingWithPath(t *testing.T) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(handler))
 	pairingServer := PairingServer{baseUrl: server.URL + "/pairing"}
-	pairDetails, err := pairingServer.respondToPairingRequest("ABC123", "myJwk")
+	pairDetails, err := pairingServer.respondToPairingRequest("ABC123", "myJwk", make(map[string]string))
 
 	if err != nil {
 		t.Error(err)
