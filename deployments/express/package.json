@@ -1,0 +1,23 @@
+{
+    "name": "thingrtc-express",
+    "scripts": {
+        "build": "tsc",
+        "serve": "nodemon src/index.ts"
+    },
+    "private": true,
+    "devDependencies": {
+        "@types/cors": "^2.8.10",
+        "@types/express": "^4.17.12",
+        "@types/ws": "^7.4.5",
+        "nodemon": "^2.0.20",
+        "ts-node": "^10.0.0",
+        "typescript": "^4.0.5"
+    },
+    "dependencies": {
+        "cors": "^2.8.5",
+        "express": "^4.17.1",
+        "thingrtc-pairing-server": "file:../../pairing-server",
+        "thingrtc-signalling-server": "file:../../signalling-server",
+        "ws": "^7.5.0"
+    }
+}
