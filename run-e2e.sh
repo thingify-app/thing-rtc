@@ -12,7 +12,7 @@ npm --prefix pairing-server run buildWatch &
 npm --prefix signalling-server run buildWatch &
 
 # Live-compile peer library in background.
-npm --prefix peer run buildWatch &
+npm --prefix web-peer run buildWatch &
 
 # Serve Deno pairing/signalling example in background.
 cd deployments/deno-deploy && ./run.sh &
