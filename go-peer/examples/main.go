@@ -9,9 +9,9 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	thingrtc "github.com/thingify-app/thing-rtc-go"
-	"github.com/thingify-app/thing-rtc-go/codec/x264"
-	"github.com/thingify-app/thing-rtc-go/pairing"
+	thingrtc "github.com/thingify-app/thing-rtc"
+	"github.com/thingify-app/thing-rtc/codec/x264"
+	"github.com/thingify-app/thing-rtc/pairing"
 
 	_ "github.com/pion/mediadevices/pkg/driver/videotest"
 	// Uncomment below and comment above to use the camera.

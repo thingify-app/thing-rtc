@@ -8,7 +8,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v3"
-	"github.com/thingify-app/thing-rtc-go/pairing"
+	"github.com/thingify-app/thing-rtc/pairing"
 )
 
 // SignallingServer handles signalling communications to establish a connection

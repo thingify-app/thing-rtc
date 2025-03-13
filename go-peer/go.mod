@@ -1,4 +1,4 @@
-module github.com/thingify-app/thing-rtc-go
+module github.com/thingify-app/thing-rtc
 
 go 1.16
 

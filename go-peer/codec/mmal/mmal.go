@@ -4,7 +4,7 @@ import (
 	"github.com/pion/mediadevices"
 	"github.com/pion/mediadevices/pkg/codec/mmal"
 
-	"github.com/thingify-app/thing-rtc-go/codec"
+	"github.com/thingify-app/thing-rtc/codec"
 )
 
 func NewCodec(bitrate int) (*codec.Codec, error) {
