@@ -15,7 +15,7 @@ import (
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
 
-	"github.com/thingify-app/thing-rtc/codec"
+	"github.com/thingify-app/thing-rtc/peer-go/codec"
 )
 
 type MediaSource struct {

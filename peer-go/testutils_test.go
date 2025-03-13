@@ -7,7 +7,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v3"
-	"github.com/thingify-app/thing-rtc/pairing"
+	"github.com/thingify-app/thing-rtc/peer-go/pairing"
 )
 
 type MockTokenGenerator struct {

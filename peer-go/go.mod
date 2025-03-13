@@ -1,4 +1,4 @@
-module github.com/thingify-app/thing-rtc
+module github.com/thingify-app/thing-rtc/peer-go
 
 go 1.16
 

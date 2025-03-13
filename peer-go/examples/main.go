@@ -9,13 +9,13 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	thingrtc "github.com/thingify-app/thing-rtc"
-	"github.com/thingify-app/thing-rtc/codec/x264"
-	"github.com/thingify-app/thing-rtc/pairing"
+	thingrtc "github.com/thingify-app/thing-rtc/peer-go"
+	"github.com/thingify-app/thing-rtc/peer-go/codec/x264"
+	"github.com/thingify-app/thing-rtc/peer-go/pairing"
 
 	_ "github.com/pion/mediadevices/pkg/driver/videotest"
 	// Uncomment below and comment above to use the camera.
-	// _ "github.com/thingify-app/thing-rtc-go/driver/camera"
+	// _ "github.com/thingify-app/thing-rtc/peer-go/driver/camera"
 )
 
 const PAIRING_SERVER_URL = "https://thingify.deno.dev/pairing"

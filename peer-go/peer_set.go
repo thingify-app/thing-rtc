@@ -1,6 +1,6 @@
 package thingrtc
 
-import "github.com/thingify-app/thing-rtc/pairing"
+import "github.com/thingify-app/thing-rtc/peer-go/pairing"
 
 type PeerSet struct {
 	peers []*Peer

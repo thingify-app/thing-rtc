@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/pion/webrtc/v3"
-	"github.com/thingify-app/thing-rtc/codec"
-	"github.com/thingify-app/thing-rtc/pairing"
+	"github.com/thingify-app/thing-rtc/peer-go/codec"
+	"github.com/thingify-app/thing-rtc/peer-go/pairing"
 )
 
 // Peer represents a connection (attempted or actual) to a ThingRTC peer.
