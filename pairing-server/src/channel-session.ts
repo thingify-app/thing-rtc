@@ -1,27 +1,30 @@
 import { ConnectionChannel } from './connection-channel';
+import { MessageQueue } from './utils';
 
 /**
  * Wraps a ConnectionChannel to parse/handle the types of message we send/receive.
  */
 export class ChannelSession {
-  constructor(private channel: ConnectionChannel) {}
+  private responseQueue = new MessageQueue<string>();
+  private confirmQueue = new MessageQueue<PairingEntry>();
 
-  async waitForResponse(): Promise<string> {
-    return await this.waitForMessage().then(message => {
-        const parsed = this.parseChannelMessage(message);
-        if (parsed.type === 'response') {
-            return Promise.resolve(parsed.message);
-        }
+  constructor(private channel: ConnectionChannel) {
+    this.channel.onMessage(message => {
+      const parsed = this.parseChannelMessage(message);
+      if (parsed.type === 'response') {
+        this.responseQueue.pushMessage(parsed.message);
+      } else if (parsed.type === 'confirm') {
+        this.confirmQueue.pushMessage(JSON.parse(parsed.message));
+      }
     });
   }
 
+  async waitForResponse(): Promise<string> {
+    return await this.responseQueue.waitForMessage();
+  }
+
   async waitForConfirmation(): Promise<PairingEntry> {
-    return await this.waitForMessage().then(message => {
-        const parsed = this.parseChannelMessage(message);
-        if (parsed.type === 'confirm') {
-            return Promise.resolve(JSON.parse(parsed.message));
-        }
-    });
+    return await this.confirmQueue.waitForMessage();
   }
 
   async sendResponse(initiatorPublicKey: string): Promise<void> {
@@ -30,12 +33,6 @@ export class ChannelSession {
 
   async confirmResponse(entry: PairingEntry): Promise<void> {
     await this.sendChannelMessage('confirm', JSON.stringify(entry));
-  }
-
-  private async waitForMessage(): Promise<string> {
-    return new Promise<string>((resolve, reject) => {
-        this.channel.onMessage(message => resolve(message));
-    });
   }
 
   private parseChannelMessage(message: string): ChannelMessage {

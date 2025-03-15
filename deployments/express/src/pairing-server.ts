@@ -1,6 +1,6 @@
 import * as WebSocket from 'ws';
 import { createPrivateKey } from 'crypto';
-import { PairingServer as Server, InMemoryConnectionChannelFactory } from 'thingrtc-pairing-server';
+import { PairingServer as Server, InMemoryConnectionChannelFactory, Socket } from 'thingrtc-pairing-server';
 import { Request, Response } from 'express';
 
 export class PairingServer {
@@ -19,31 +19,22 @@ export class PairingServer {
         }
     }
 
-    handleWebSocketConnection(ws: WebSocket) {
-        let messageReceived = false;
-    
-        ws.on('message', async data => {
-            console.log(`Message received: ${data}`);
+    async handleWebSocketConnection(ws: WebSocket) {
+        let listener = (message: string) => {};
+        ws.addEventListener('message', event => listener(event.data));
 
-            if (messageReceived) {
-                ws.close();
-                return;
-            }
+        const socket: Socket = {
+            listenMessage: async () => {
+                const response = await new Promise<string>((resolve, reject) => {
+                    listener = resolve;
+                });
+                listener = () => {};
+                return response;
+            },
+            sendMessage: async data => ws.send(data),
+            close: async () => ws.close(),
+        };
 
-            messageReceived = true;
-
-            const pendingPairing = await this.server.createPairingRequest(data as string);
-            const pairingData = pendingPairing.pairingData;
-
-            ws.send(JSON.stringify(pairingData));
-
-            const status = await pendingPairing.redemptionResult();
-            ws.send(JSON.stringify(status));
-            ws.close();
-        });
-    
-        ws.on('close', () => {
-            console.log('Connection closed.');
-        });
+        await this.server.createPairingRequest(socket);
     }
 }

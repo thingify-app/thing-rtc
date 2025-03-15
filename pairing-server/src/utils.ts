@@ -30,3 +30,26 @@ export function timeoutWrapperFactory(timeout: (millis: number) => Promise<void>
         return result as T;
     }
 }
+
+export class MessageQueue<T> {
+    private queue: T[] = [];
+    private listener = () => {};
+
+    async waitForMessage(): Promise<T> {
+        if (this.queue.length > 0) {
+            return this.queue.shift();
+        } else {
+            return new Promise<T>((resolve, reject) => {
+                this.listener = () => {
+                    resolve(this.queue.shift());
+                    this.listener = () => {};
+                };
+            });
+        }
+    }
+
+    pushMessage(message: T) {
+        this.queue.push(message);
+        this.listener();
+    }
+}

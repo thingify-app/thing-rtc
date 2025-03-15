@@ -1,5 +1,5 @@
 // @deno-types="./dist/pairing-server/index.d.ts"
-import { PairingServer as Server } from './dist/pairing-server/index.js';
+import { PairingServer as Server, Socket } from './dist/pairing-server/index.js';
 import { BroadcastChannelConnectionChannelFactory } from './connection-channel.ts';
 
 export class PairingServer {
@@ -13,9 +13,9 @@ export class PairingServer {
         const url = new URL(req.url);
         const path = url.pathname.slice(1).split('/');
         const shortcode = path[2];
-        const body = JSON.parse(await req.text());
 
         try {
+            const body = JSON.parse(await req.text());
             const response = await this.server.respondToPairingRequest(shortcode, body.publicKey);
             return new Response(JSON.stringify(response));
         } catch (err) {
@@ -24,32 +24,22 @@ export class PairingServer {
         }
     }
 
-    handleWebSocketConnection(ws: WebSocket) {
-        let messageReceived = false;
-    
-        ws.onmessage = async event => {
-            const data = event.data;
-            console.log(`Message received: ${data}`);
+    async handleWebSocketConnection(ws: WebSocket) {
+        let listener = (message: string) => {};
+        ws.addEventListener('message', event => listener(event.data));
 
-            if (messageReceived) {
-                ws.close();
-                return;
-            }
-
-            messageReceived = true;
-
-            const pendingPairing = await this.server.createPairingRequest(data as string);
-            const pairingData = pendingPairing.pairingData;
-
-            ws.send(JSON.stringify(pairingData));
-
-            const status = await pendingPairing.redemptionResult();
-            ws.send(JSON.stringify(status));
-            ws.close();
+        const socket: Socket = {
+            listenMessage: async () => {
+                const response = await new Promise<string>((resolve, reject) => {
+                    listener = resolve;
+                });
+                listener = () => {};
+                return response;
+            },
+            sendMessage: async data => ws.send(data),
+            close: async () => ws.close(),
         };
-    
-        ws.onclose = () => {
-            console.log('Connection closed.');
-        };
+
+        await this.server.createPairingRequest(socket);
     }
 }

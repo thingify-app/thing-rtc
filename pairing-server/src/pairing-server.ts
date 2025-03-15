@@ -2,6 +2,7 @@ import { SignJWT, KeyLike } from 'jose';
 import { ChannelSession, PairingEntry } from './channel-session';
 import { ConnectionChannelFactory } from './connection-channel';
 import { generatePairingId, generateShortcode, realTimeoutWrapper, TimeoutWrapper } from './utils';
+import { Socket } from './socket';
 
 const EXPIRY_MILLIS = 60*1000;
 const RESPONSE_TIMEOUT = 10_000;
@@ -17,7 +18,9 @@ export class PairingServer {
         private withTimeout: TimeoutWrapper = realTimeoutWrapper
     ) {}
 
-    async createPairingRequest(responderPublicKey: string): Promise<PendingPairing> {
+    async createPairingRequest(socket: Socket): Promise<void> {
+        const responderPublicKey = await socket.listenMessage();
+
         const shortcode = this.shortcodeGenerator();
         const pairingId = this.pairingIdGenerator();
         const expiry = this.currentMillis() + EXPIRY_MILLIS;
@@ -37,28 +40,33 @@ export class PairingServer {
             token: signedToken
         };
 
-        const pendingPairing = new PendingPairing(initialData);
-        
+        const channel = await this.channelFactory.getConnectionChannel(shortcode);
+        const session = new ChannelSession(channel);
+
+        await socket.sendMessage(JSON.stringify(initialData));
+
         const entry: PairingEntry = {
             pairingId,
             shortcode,
             responderPublicKey
         };
 
-        const channel = await this.channelFactory.getConnectionChannel(shortcode);
-        const session = new ChannelSession(channel);
+        try {
+            const initiatorPublicKey = await this.withTimeout(session.waitForResponse(), EXPIRY_MILLIS);
 
-        // We can't await on the response promise, as we need to return the
-        // pending pairing first (including shortcode). We handle the response
-        // asynchronously and call the relevant callback on the pendingPairing.
-        this.withTimeout(session.waitForResponse(), EXPIRY_MILLIS).then(async initiatorPublicKey => {
             await session.confirmResponse(entry);
-            pendingPairing.complete(initiatorPublicKey);
-        }).catch(_ => {
-            pendingPairing.expire();
-        });
 
-        return pendingPairing;
+            await socket.sendMessage(JSON.stringify({
+                status: 'paired',
+                initiatorPublicKey,
+            }));
+        } catch (err) {
+            await socket.sendMessage(JSON.stringify({
+                status: 'expired',
+            }));
+        }
+
+        await socket.close();
     }
 
     async respondToPairingRequest(shortcode: string, initiatorPublicKey: string): Promise<InitiatorPairDetails> {
@@ -90,39 +98,6 @@ export class PairingServer {
             // shortcode does not exist for the client.
             throw new Error('Shortcode does not exist!');
         }
-    }
-}
-
-export class PendingPairing {
-    private resolve = (pairingStatus: PairingStatus) => { this.result = pairingStatus; };
-    private result: PairingStatus = null;
-
-    constructor(private initialData: InitialPairingData) {}
-
-    get pairingData(): InitialPairingData {
-        return this.initialData;
-    }
-
-    async redemptionResult(): Promise<PairingStatus> {
-        if (this.result) {
-            return this.result;
-        }
-        return new Promise((resolve, reject) => {
-            this.resolve = resolve;
-        });
-    }
-
-    complete(publicKey: string) {
-        this.resolve({
-            status: 'paired',
-            initiatorPublicKey: publicKey
-        });
-    }
-
-    expire() {
-        this.resolve({
-            status: 'expired'
-        });
     }
 }
 
