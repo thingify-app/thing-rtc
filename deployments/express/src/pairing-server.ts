@@ -11,7 +11,7 @@ export class PairingServer {
 
     async handleRespondToPairing(req: Request, res: Response) {
         try {
-            const response = await this.server.respondToPairingRequest(req.params.shortcode, req.body.publicKey);
+            const response = await this.server.respondToPairingRequest(req.params.shortcode, req.body.publicKey, req.body.metadata);
             res.json(response);
         } catch (err) {
             console.error(err);

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { ConnectionChannel } from './connection-channel';
 import { MessageQueue } from './utils';
 
@@ -5,21 +6,21 @@ import { MessageQueue } from './utils';
  * Wraps a ConnectionChannel to parse/handle the types of message we send/receive.
  */
 export class ChannelSession {
-  private responseQueue = new MessageQueue<string>();
+  private responseQueue = new MessageQueue<PairingResponse>();
   private confirmQueue = new MessageQueue<PairingEntry>();
 
   constructor(private channel: ConnectionChannel) {
     this.channel.onMessage(message => {
-      const parsed = this.parseChannelMessage(message);
+      const parsed = ChannelMessage.parse(JSON.parse(message));
       if (parsed.type === 'response') {
-        this.responseQueue.pushMessage(parsed.message);
+        this.responseQueue.pushMessage(parsed.data);
       } else if (parsed.type === 'confirm') {
-        this.confirmQueue.pushMessage(JSON.parse(parsed.message));
+        this.confirmQueue.pushMessage(parsed.data);
       }
     });
   }
 
-  async waitForResponse(): Promise<string> {
+  async waitForResponse(): Promise<PairingResponse> {
     return await this.responseQueue.waitForMessage();
   }
 
@@ -27,34 +28,45 @@ export class ChannelSession {
     return await this.confirmQueue.waitForMessage();
   }
 
-  async sendResponse(initiatorPublicKey: string): Promise<void> {
-    await this.sendChannelMessage('response', initiatorPublicKey);
+  async sendResponse(initiatorPublicKey: string, metadata: Record<string, string>): Promise<void> {
+    await this.sendChannelMessage({
+      type: 'response',
+      data: {
+        publicKey: initiatorPublicKey,
+        metadata
+      }
+    });
   }
 
   async confirmResponse(entry: PairingEntry): Promise<void> {
-    await this.sendChannelMessage('confirm', JSON.stringify(entry));
-  }
-
-  private parseChannelMessage(message: string): ChannelMessage {
-    return JSON.parse(message) as ChannelMessage;
-  }
-
-  private async sendChannelMessage(type: string, message: string) {
-    const jsonMessage = JSON.stringify({
-      type,
-      message
+    await this.sendChannelMessage({
+      type: 'confirm',
+      data: entry
     });
-    await this.channel.sendMessage(jsonMessage);
+  }
+
+  private async sendChannelMessage(message: ChannelMessage) {
+    await this.channel.sendMessage(JSON.stringify(message));
   }
 }
 
-export interface PairingEntry {
-    shortcode: string;
-    pairingId: string;
-    responderPublicKey: string;
-}
+export const PairingEntry = z.object({
+  shortcode: z.string(),
+  pairingId: z.string(),
+  responderPublicKey: z.string(),
+  metadata: z.record(z.string(), z.string())
+});
+export type PairingEntry = z.infer<typeof PairingEntry>;
 
-interface ChannelMessage {
-  type: string;
-  message: string;
-}
+export const PairingResponse = z.object({
+  publicKey: z.string(),
+  metadata: z.record(z.string(), z.string())
+});
+export type PairingResponse = z.infer<typeof PairingResponse>;
+
+const ChannelMessage = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('response'), data: PairingResponse }),
+  z.object({ type: z.literal('confirm'), data: PairingEntry }),
+]);
+
+export type ChannelMessage = z.infer<typeof ChannelMessage>;

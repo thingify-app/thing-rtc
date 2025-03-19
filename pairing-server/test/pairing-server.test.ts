@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 import { PairingServer } from '../src/pairing-server';
 import { expect, use } from 'chai';
 import * as chaiAsPromised from 'chai-as-promised';
@@ -26,6 +28,10 @@ describe('server', function() {
   });
   const privateKey = createPrivateKey(keyPair.privateKey);
   const publicKey = createPublicKey(keyPair.publicKey);
+  const basicInitialMessage = JSON.stringify({
+    publicKey: 'abc',
+    metadata: {},
+  });
 
   let scheduler: Scheduler;
   let socket: MockSocket;
@@ -50,7 +56,7 @@ describe('server', function() {
 
   it('pairing request returns expected values', async function() {
     const result = async () => {
-      socket.pushMessage('abc');
+      socket.pushMessage(basicInitialMessage);
       const response = JSON.parse(await socket.getSentMessage());
 
       // Make it expire so we don't hang the test - we only care about the first
@@ -67,12 +73,44 @@ describe('server', function() {
     expect(response.expiry).to.equal(60000);
   });
 
+  it('pairing request closes on invalid JSON', async function() {
+    const result = async () => {
+      socket.pushMessage('this is not json');
+      const response = await socket.getSentMessage();
+      expect(response).to.equal('Invalid message!');
+    };
+
+    await Promise.all([result(), server.createPairingRequest(socket)]);
+    
+    expect(socket.isClosed()).to.be.true;
+  });
+
+  it('pairing request closes on invalid message schema', async function() {
+    const result = async () => {
+      socket.pushMessage('{}');
+      const response = await socket.getSentMessage();
+      expect(response).to.equal('Invalid message!');
+    };
+
+    await Promise.all([result(), server.createPairingRequest(socket)]);
+    
+    expect(socket.isClosed()).to.be.true;
+  });
+
+  it('pairing request closes on initial message timeout', async function() {
+    runAfter(async () => scheduler.setCurrentTimeMillis(11_000));
+
+    await server.createPairingRequest(socket);
+
+    expect(socket.isClosed()).to.be.true;
+  });
+
   it('pairing redemption result returns paired state after redemption', async function() {
     const result = async () => {
-      socket.pushMessage('abc');
+      socket.pushMessage(basicInitialMessage);
       const response = JSON.parse(await socket.getSentMessage());
       
-      await server.respondToPairingRequest(response.shortcode, 'def');
+      await server.respondToPairingRequest(response.shortcode, 'def', {});
       return JSON.parse(await socket.getSentMessage());
     };
 
@@ -80,16 +118,17 @@ describe('server', function() {
 
     expect(redemptionResult.status).to.equal('paired');
     expect(redemptionResult.initiatorPublicKey).to.equal('def');
+    expect(redemptionResult.metadata).to.deep.equal({});
   });
 
   it('pairing redemption result returns paired state after redemption (after delay)', async function() {
     const result = async () => {
-      socket.pushMessage('abc');
+      socket.pushMessage(basicInitialMessage);
       const response = JSON.parse(await socket.getSentMessage());
 
       scheduler.setCurrentTimeMillis(50_000);
 
-      await server.respondToPairingRequest(response.shortcode, 'def');
+      await server.respondToPairingRequest(response.shortcode, 'def', {});
       return JSON.parse(await socket.getSentMessage());
     };
     
@@ -101,7 +140,7 @@ describe('server', function() {
 
   it('pairing redemption result returns expired state after expiry', async function() {
     const result = async () => {
-      socket.pushMessage('abc');
+      socket.pushMessage(basicInitialMessage);
       JSON.parse(await socket.getSentMessage());
 
       scheduler.setCurrentTimeMillis(70_000);
@@ -114,18 +153,41 @@ describe('server', function() {
     expect(redemptionResult.status).to.equal('expired');
   });
 
+  it('pairing response exchanges metadata', async function() {
+    const result = async () => {
+      socket.pushMessage(JSON.stringify({
+        publicKey: 'abc',
+        metadata: {
+          'foo': 'bar'
+        }
+      }));
+      const responderResponse = JSON.parse(await socket.getSentMessage());
+      const initiatorResponse = await server.respondToPairingRequest(responderResponse.shortcode, 'def', {
+        'baz': 'bat'
+      });
+
+      const completionResponse = JSON.parse(await socket.getSentMessage());
+
+      expect(initiatorResponse.metadata).to.deep.equal({'foo': 'bar'});
+      expect(completionResponse.metadata).to.deep.equal({'baz': 'bat'});
+    };
+
+    await Promise.all([server.createPairingRequest(socket), result()]);
+  });
+
   it('pairing response returns expected values', async function() {
     const result = async () => {
-      socket.pushMessage('abc');
+      socket.pushMessage(basicInitialMessage);
       const responderResponse = JSON.parse(await socket.getSentMessage());
 
-      const initiatorResponse = await server.respondToPairingRequest(responderResponse.shortcode, 'def');
+      const initiatorResponse = await server.respondToPairingRequest(responderResponse.shortcode, 'def', {});
       const verifiedToken = (await jwtVerify(initiatorResponse.initiatorToken, publicKey)).payload as any;
 
       expect(verifiedToken.role).to.equal('initiator');
       expect(verifiedToken.pairingId).to.equal(initiatorResponse.pairingId);
       expect(initiatorResponse.pairingId).to.equal(responderResponse.pairingId);
       expect(initiatorResponse.responderPublicKey).to.equal('abc');
+      expect(initiatorResponse.metadata).to.deep.equal({});
 
       await socket.getSentMessage();
     };
@@ -135,7 +197,7 @@ describe('server', function() {
 
   it('pairing response throws after expiry', async function() {
     const result = async () => {
-      socket.pushMessage('abc');
+      socket.pushMessage(basicInitialMessage);
 
       const response = JSON.parse(await socket.getSentMessage());
       scheduler.setCurrentTimeMillis(70_000);
@@ -147,25 +209,25 @@ describe('server', function() {
     // Allow for timeout of shortcode query.
     runAfter(async () => scheduler.setCurrentTimeMillis(80_000));
 
-    await expect(server.respondToPairingRequest(responderResponse.shortcode, 'def')).to.be.rejectedWith('Shortcode does not exist!');
+    await expect(server.respondToPairingRequest(responderResponse.shortcode, 'def', {})).to.be.rejectedWith('Shortcode does not exist!');
   });
 
   it('pairing response throws on invalid shortcode', async function() {
     // Allow for timeout of shortcode query.
     runAfter(async () => scheduler.setCurrentTimeMillis(11_000));
-    await expect(server.respondToPairingRequest('blah', 'abc')).to.be.rejectedWith('Shortcode does not exist!');
+    await expect(server.respondToPairingRequest('blah', 'abc', {})).to.be.rejectedWith('Shortcode does not exist!');
   });
 
   it('pairing response throws if tried again after redemption', async function() {
     const result = async () => {
-      socket.pushMessage('abc');
+      socket.pushMessage(basicInitialMessage);
       const responderResponse = JSON.parse(await socket.getSentMessage());
-      await server.respondToPairingRequest(responderResponse.shortcode, 'def');
+      await server.respondToPairingRequest(responderResponse.shortcode, 'def', {});
 
       // Allow for timeout of shortcode query.
       runAfter(async () => scheduler.setCurrentTimeMillis(11_000));
 
-      await expect(server.respondToPairingRequest(responderResponse.shortcode, 'ghi')).to.be.rejectedWith('Shortcode does not exist!');
+      await expect(server.respondToPairingRequest(responderResponse.shortcode, 'ghi', {})).to.be.rejectedWith('Shortcode does not exist!');
     };
 
     await Promise.all([server.createPairingRequest(socket), result()]);

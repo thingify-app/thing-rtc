@@ -16,7 +16,7 @@ export class PairingServer {
 
         try {
             const body = JSON.parse(await req.text());
-            const response = await this.server.respondToPairingRequest(shortcode, body.publicKey);
+            const response = await this.server.respondToPairingRequest(shortcode, body.publicKey, body.metadata);
             return new Response(JSON.stringify(response));
         } catch (err) {
             console.error(err);
