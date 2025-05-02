@@ -184,6 +184,23 @@ func (p *peerTask) setupCommon() error {
 
 	p.server.OnPeerDisconnect(func() {})
 
+	ordered := false
+	maxRetransmits := uint16(0)
+	negotiated := true
+	id := uint16(0)
+	options := &webrtc.DataChannelInit{
+		Ordered:        &ordered,
+		MaxRetransmits: &maxRetransmits,
+		Negotiated:     &negotiated,
+		ID:             &id,
+	}
+	dataChannel, err := p.peerConnection.CreateDataChannel("dataChannel", options)
+	if err != nil {
+		return err
+	}
+	p.dataChannel = dataChannel
+	dataChannel.OnMessage(p.handleDataChannelMessage)
+
 	for _, track := range p.tracks {
 		_, err := p.peerConnection.AddTrack(track)
 		if err != nil {
@@ -218,15 +235,6 @@ func (p *peerTask) setupInitiator() {
 			p.errorListener(err)
 		}
 	})
-
-	dataChannel, err := p.peerConnection.CreateDataChannel("dataChannel", nil)
-	if err != nil {
-		p.errorListener(err)
-		return
-	}
-
-	p.dataChannel = dataChannel
-	dataChannel.OnMessage(p.handleDataChannelMessage)
 }
 
 func (p *peerTask) setupResponder() {
@@ -248,11 +256,6 @@ func (p *peerTask) setupResponder() {
 			return
 		}
 		p.server.SendAnswer(answer)
-	})
-
-	p.peerConnection.OnDataChannel(func(dc *webrtc.DataChannel) {
-		p.dataChannel = dc
-		dc.OnMessage(p.handleDataChannelMessage)
 	})
 }
 
