@@ -20,20 +20,29 @@ const disconnectButton = document.getElementById('disconnectButton') as HTMLButt
 const messageText = document.getElementById('message') as HTMLInputElement;
 const sendMessageButton = document.getElementById('sendMessageButton') as HTMLButtonElement;
 
+const startSpeedTestButton = document.getElementById('startSpeedTestButton') as HTMLButtonElement;
+const stopSpeedTestButton = document.getElementById('stopSpeedTestButton') as HTMLButtonElement;
+const receivedBytesBox = document.getElementById('receivedBytes') as HTMLDivElement;
+const sentBytesBox = document.getElementById('sentBytes') as HTMLDivElement;
+
 const localVideo = document.getElementById('localVideo') as HTMLVideoElement;
 const remoteVideo = document.getElementById('remoteVideo') as HTMLVideoElement;
 
 const remoteMediaStream = new MediaStream();
 
 const localhost = location.hostname === 'localhost';
-const signallingServer = localhost ? `ws://localhost:8000/signalling` : `wss://thingify.deno.dev/signalling`;
+const signallingServer = localhost ? `ws://localhost:8000/signalling` : `wss://dev.thingify.app/signalling`;
 
 let peerConfig: PeerConfig|null = null;
 let peer: ThingPeer|null = null;
 
+let speedTestActive = false;
+
 disconnectButton.disabled = true;
 initiatorBox.style.display = 'block';
 responderBox.style.display = 'none';
+
+stopSpeedTestButton.disabled = true;
 
 
 initiatorRadio.addEventListener('change', () => {
@@ -126,6 +135,45 @@ sendMessageButton.addEventListener('click', () => {
     peer?.sendMessage(messageText.value);
 });
 
+startSpeedTestButton.addEventListener('click', () => {
+    speedTestActive = true;
+    startSpeedTestButton.disabled = true;
+    stopSpeedTestButton.disabled = false;
+
+    const messageBuffer = new Uint8Array(16384);
+    let bytesSent = 0;
+    let measureStartTime = Date.now();
+
+    const sendFn = () => {
+        crypto.getRandomValues(messageBuffer);
+        peer?.sendMessage(messageBuffer.buffer);
+        bytesSent += messageBuffer.byteLength;
+
+        const currentTime = Date.now();
+        const elapsedTime = currentTime - measureStartTime;
+        if (elapsedTime >= 1000) {
+            const bytesPerSec = bytesSent / (elapsedTime / 1000);
+            sentBytesBox.innerText = `Sending: ${formatBps(bytesPerSec)}`;
+            bytesSent = 0;
+            measureStartTime = currentTime;
+        }
+
+        if (speedTestActive) {
+            // Queue up another send, allowing the browser event loop to
+            // execute in between.
+            setTimeout(sendFn, 0);
+        }
+    };
+
+    sendFn();
+});
+
+stopSpeedTestButton.addEventListener('click', () => {
+    speedTestActive = false;
+    startSpeedTestButton.disabled = false;
+    stopSpeedTestButton.disabled = true;
+});
+
 async function getCamera(): Promise<MediaStream> {
     return await navigator.mediaDevices?.getUserMedia({video: true});
 }
@@ -140,13 +188,27 @@ function createPeer(peerConfig: PeerConfig): ThingPeer {
             remoteMediaStream.getTracks().forEach(track => remoteMediaStream.removeTrack(track));
         }
     });
+
     peer.on('stringMessage', message => {
         console.log(`String message received: ${message}`);
     });
+
+    // Using binary messages for speed test:
+    let bytesReceived = 0;
+    let measureStartTime = Date.now();
     peer.on('binaryMessage', message => {
-        console.log('Binary message received:');
-        console.log(message);
+        bytesReceived += message.byteLength;
+
+        const currentTime = Date.now();
+        const elapsedTime = currentTime - measureStartTime;
+        if (elapsedTime >= 1000) {
+            const bytesPerSec = bytesReceived / (elapsedTime / 1000);
+            receivedBytesBox.innerText = `Received: ${formatBps(bytesPerSec)}`;
+            bytesReceived = 0;
+            measureStartTime = currentTime;
+        }
     });
+
     peer.on('mediaStream', track => {
         console.log('Received track');
         remoteMediaStream.addTrack(track);
@@ -154,4 +216,14 @@ function createPeer(peerConfig: PeerConfig): ThingPeer {
     });
 
     return peer;
+}
+
+function formatBps(bytesPerSec: number): string {
+    if (bytesPerSec >= 1_000_000) {
+        return `${(bytesPerSec / 1_000_000).toFixed(2)}Mbps`;
+    } else if (bytesPerSec >= 1000) {
+        return `${(bytesPerSec / 1000).toFixed(2)}kbps`;
+    } else {
+        return `${bytesPerSec.toFixed(2)}bps`;
+    }
 }
