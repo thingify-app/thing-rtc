@@ -1,12 +1,12 @@
 // @deno-types="./dist/signalling-server/index.d.ts"
-import { Server, Connection, JwtAuthValidator, MessageParser } from './dist/signalling-server/index.js';
+import { Server, Connection, ParseThroughAuthValidator, MessageParser } from './dist/signalling-server/index.js';
 import { BroadcastChannelConnectionChannelFactory } from './connection-channel.ts';
 
 export class SignallingServer {
     private server: Server;
 
     constructor(publicKey: CryptoKey) {
-        const authValidator = new JwtAuthValidator(publicKey);
+        const authValidator = new ParseThroughAuthValidator();
         this.server = new Server(authValidator, new BroadcastChannelConnectionChannelFactory());
     }
 

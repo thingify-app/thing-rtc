@@ -1,6 +1,7 @@
 import { generateNonce } from "./nonce-generator";
+import { PeerAuth } from "./peer-config/peer-auth";
 import { ConstantRetry, Retry } from "./retry";
-import { TokenGenerator } from "./token-generator";
+import { ServerAuth } from "./server-auth";
 
 /** Abstracts two-way communication with the Signalling Server. */
 export class SignallingServer {
@@ -20,16 +21,18 @@ export class SignallingServer {
 
     constructor(
         private serverUrl: string,
-        private tokenGenerator: TokenGenerator,
+        private serverAuth: ServerAuth,
+        private peerAuth: PeerAuth,
+        private pairingId: string,
         private nonceGenerator: () => string = generateNonce
     ) {}
 
     connect(): void {
         this.state = 'connected';
-        const url = `${this.serverUrl}/${this.tokenGenerator.getPairingId()}`;
+        const url = `${this.serverUrl}/${this.pairingId}`;
         this.socket = new WebSocket(url);
         this.socket.addEventListener('open', async () => {
-            const token = await this.tokenGenerator.generateToken();
+            const token = await this.serverAuth.generateToken();
             this.sendAuthMessage(token);
             // TODO: look into whether we need to await some kind of auth confirmation.
             this.flushQueue();
@@ -87,7 +90,7 @@ export class SignallingServer {
                     if (!json.signature) {
                         throw new Error('Signature missing from received message.');
                     }
-                    const verified = await this.tokenGenerator.verifyMessage(json.signature, json.data);
+                    const verified = await this.peerAuth.verifyMessage(json.signature, json.data);
                     if (!verified) {
                         throw new Error('Signature did not match message.');
                     }
@@ -195,7 +198,7 @@ export class SignallingServer {
             // Two levels of stringify, so that data can be parsed independently
             // after type is parsed.
             stringData = JSON.stringify(dataWithNonce);
-            signature = await this.tokenGenerator.signMessage(stringData);
+            signature = await this.peerAuth.signMessage(stringData);
         } else {
             stringData = JSON.stringify(data);
         }

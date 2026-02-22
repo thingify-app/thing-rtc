@@ -1,5 +1,6 @@
+import { PeerConfig } from "./peer-config/peer-config";
+import { ServerAuth } from "./server-auth";
 import { SignallingServer } from "./signalling-server";
-import { TokenGenerator } from "./token-generator";
 
 /** Wraps the entire process of setting up a P2P connection. */
 export class ThingPeer {
@@ -9,12 +10,15 @@ export class ThingPeer {
     private stringMessageListener?: (message: string) => void;
     private binaryMessageListener?: (message: ArrayBuffer) => void;
 
-    constructor(private serverUrl: string) {}
+    constructor(
+        private serverUrl: string,
+        private serverAuth: ServerAuth,
+        private peerConfig: PeerConfig,
+    ) {}
 
-    connect(tokenGenerator: TokenGenerator, mediaStreams: MediaStream[]) {
-        const server = new SignallingServer(this.serverUrl, tokenGenerator);
-        const role = tokenGenerator.getRole();
-        this.peerTasks = role === 'initiator' ? new InitiatorPeerTasks(server, mediaStreams) : new ResponderPeerTasks(server, mediaStreams);
+    connect(mediaStreams: MediaStream[]) {
+        const server = new SignallingServer(this.serverUrl, this.serverAuth, this.peerConfig.peerAuth, this.peerConfig.pairingId);
+        this.peerTasks = this.peerConfig.role === 'initiator' ? new InitiatorPeerTasks(server, mediaStreams) : new ResponderPeerTasks(server, mediaStreams);
         this.peerTasks.connectionStateListener = this.connectionStateListener;
         this.peerTasks.mediaStreamListener = this.mediaStreamListener;
         this.peerTasks.stringMessageListener = this.stringMessageListener;

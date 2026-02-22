@@ -6,26 +6,23 @@
     </head>
     <body>
         <div class="box">
-            <h1>Create Pairing</h1>
+            <h1>Peer Setup</h1>
             <p>Role:</p>
             <input type="radio" id="initiator" name="role" checked/>
             <label for="initiator">Initiator</label>
             <input type="radio" id="responder" name="role"/>
             <label for="responder">Responder</label>
-            <div id="createPairingBox">
-                <button id="createPairingButton">Create pairing</button>
-                <div id="pairingShortcode"></div>
+            <div id="initiatorBox">
+                <button id="createSharedSecretButton">Create shared secret</button>
+                <div id="sharedSecret"></div>
             </div>
-            <div id="respondToPairingBox">
-                <input type="text" id="pairingShortcodeInput"/>
-                <button id="respondToPairingButton">Respond</button>
+            <div id="responderBox">
+                <input type="text" id="sharedSecretInput"/>
+                <button id="loadSharedSecretButton">Load secret</button>
+                <div id="responderStatus"></div>
             </div>
-            <div id="pairingStatus"></div>
         </div>
         <div class="box">
-            <h1>Pairings</h1>
-            <div id="pairingList"></div>
-            <p><button id="clearPairings">Clear all pairings</button></p>
             <p>Send video:</p>
             <p><input type="checkbox" id="sendVideo"/></p>
             <p><button id="connectButton">Connect</button></p>
