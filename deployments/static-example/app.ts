@@ -118,9 +118,9 @@ startSpeedTestButton.addEventListener('click', () => {
     let bytesSent = 0;
     let measureStartTime = Date.now();
 
-    const sendFn = () => {
+    const sendFn = async () => {
         crypto.getRandomValues(messageBuffer);
-        peer?.sendMessage(messageBuffer.buffer);
+        await peer?.sendMessage(messageBuffer.buffer);
         bytesSent += messageBuffer.byteLength;
 
         const currentTime = Date.now();
@@ -182,7 +182,7 @@ async function getCamera(): Promise<MediaStream> {
 
 function createPeer(peerConfig: PeerConfig): ThingPeer {
     const serverAuth = new InsecureServerAuth(peerConfig.pairingId, peerConfig.role);
-    const peer = new ThingPeer(signallingServer, serverAuth, peerConfig);
+    const peer = new ThingPeer(signallingServer, serverAuth, peerConfig, true);
 
     peer.on('connectionStateChanged', state => {
         console.log(`Peer connection state: ${state}`);

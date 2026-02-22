@@ -14,19 +14,27 @@ export class ThingPeer {
         private serverUrl: string,
         private serverAuth: ServerAuth,
         private peerConfig: PeerConfig,
+        private reliableDataChannel: boolean = false,
     ) {}
 
     connect(mediaStreams: MediaStream[]) {
-        const server = new SignallingServer(this.serverUrl, this.serverAuth, this.peerConfig.peerAuth, this.peerConfig.pairingId);
-        this.peerTasks = this.peerConfig.role === 'initiator' ? new InitiatorPeerTasks(server, mediaStreams) : new ResponderPeerTasks(server, mediaStreams);
+        const server = new SignallingServer(
+            this.serverUrl,
+            this.serverAuth,
+            this.peerConfig.peerAuth,
+            this.peerConfig.pairingId
+        );
+        this.peerTasks = this.peerConfig.role === 'initiator'
+            ? new InitiatorPeerTasks(server, mediaStreams, this.reliableDataChannel)
+            : new ResponderPeerTasks(server, mediaStreams, this.reliableDataChannel);
         this.peerTasks.connectionStateListener = this.connectionStateListener;
         this.peerTasks.mediaStreamListener = this.mediaStreamListener;
         this.peerTasks.stringMessageListener = this.stringMessageListener;
         this.peerTasks.binaryMessageListener = this.binaryMessageListener;
     }
 
-    sendMessage(message: string|ArrayBuffer): void {
-        this.peerTasks?.sendMessage(message);
+    async sendMessage(message: string|ArrayBuffer): Promise<void> {
+        await this.peerTasks?.sendMessage(message);
     }
 
     disconnect() {
@@ -83,7 +91,7 @@ interface PeerTasks {
     onAnswer(answer: RTCSessionDescriptionInit): void;
     onPeerDisconnect(): void;
 
-    sendMessage(message: string|ArrayBuffer): void;
+    sendMessage(message: string|ArrayBuffer): Promise<void>;
     disconnect(): void;
 }
 
@@ -95,7 +103,7 @@ abstract class BasePeerTasks implements PeerTasks {
     stringMessageListener?: (message: string) => void;
     binaryMessageListener?: (message: ArrayBuffer) => void;
 
-    constructor(protected server: SignallingServer, private localMediaStreams: MediaStream[]) {
+    constructor(protected server: SignallingServer, private localMediaStreams: MediaStream[], protected reliableDataChannel: boolean) {
         this.server.connect();
         this.server.on('peerConnect', () => this.onPeerConnect());
         this.server.on('iceCandidate', candidate => this.onIceCandidate(candidate));
@@ -134,8 +142,12 @@ abstract class BasePeerTasks implements PeerTasks {
         // disconnect.
     }
 
-    sendMessage(message: string | ArrayBuffer): void;
-    sendMessage(message: any): void {
+    sendMessage(message: string | ArrayBuffer): Promise<void>;
+    async sendMessage(message: any): Promise<void> {
+        // Block the promise until the message can be buffered.
+        while ((this.dataChannel?.bufferedAmount || 0) > 500_000) {
+            await waitMillis(1);
+        }
         this.dataChannel?.send(message);
     }
 
@@ -231,7 +243,14 @@ class InitiatorPeerTasks extends BasePeerTasks {
     }
 
     protected setupDataChannel(peerConnection: RTCPeerConnection) {
-        this.dataChannel = peerConnection.createDataChannel('dataChannel', {ordered: true, maxRetransmits: 0});
+        let channelConfig: RTCDataChannelInit;
+        if (this.reliableDataChannel) {
+            channelConfig = {ordered: true};
+        } else {
+            channelConfig = {ordered: false, maxRetransmits: 0};
+        }
+        this.dataChannel = peerConnection.createDataChannel('dataChannel', channelConfig);
+
         this.dataChannel.addEventListener('message', event => {
             this.onDataChannelMessage(event.data);
         });
@@ -259,4 +278,10 @@ class ResponderPeerTasks extends BasePeerTasks {
             });
         });
     }
+}
+
+async function waitMillis(millis: number): Promise<void> {
+    return new Promise<void>((resolve, _) => {
+        setTimeout(resolve, millis);
+    });
 }
