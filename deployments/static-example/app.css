@@ -7,3 +7,7 @@ body {
     padding: 8px;
     margin: 8px;
 }
+
+video {
+    width: 100%;
+}

@@ -1,4 +1,5 @@
 import { createInitiatorConfig, createResponderConfig, InsecureServerAuth, PeerConfig, ThingPeer } from 'thingrtc-peer';
+import { BrowserQRCodeReader, BrowserQRCodeSvgWriter, IScannerControls } from '@zxing/browser';
 
 const initiatorRadio = document.getElementById('initiator') as HTMLInputElement;
 const responderRadio = document.getElementById('responder') as HTMLInputElement;
@@ -9,8 +10,7 @@ const responderBox = document.getElementById('responderBox') as HTMLDivElement;
 const createSharedSecretButton = document.getElementById('createSharedSecretButton') as HTMLButtonElement;
 const sharedSecretBox = document.getElementById('sharedSecret') as HTMLDivElement;
 
-const sharedSecretInput = document.getElementById('sharedSecretInput') as HTMLInputElement;
-const loadSharedSecretButton = document.getElementById('loadSharedSecretButton') as HTMLButtonElement;
+const qrCodeVideo = document.getElementById('qrCodeVideo') as HTMLVideoElement;
 const responderStatusBox = document.getElementById('responderStatus') as HTMLDivElement;;
 
 const sendVideoCheckbox = document.getElementById('sendVideo') as HTMLInputElement;
@@ -36,6 +36,8 @@ const signallingServer = localhost ? `ws://localhost:8000/signalling` : `wss://d
 let peerConfig: PeerConfig|null = null;
 let peer: ThingPeer|null = null;
 
+let qrScannerControl: IScannerControls|null = null;
+
 let speedTestActive = false;
 
 disconnectButton.disabled = true;
@@ -52,10 +54,25 @@ initiatorRadio.addEventListener('change', () => {
     }
 });
 
-responderRadio.addEventListener('change', () => {
+responderRadio.addEventListener('change', async () => {
     if (responderRadio.checked) {
         initiatorBox.style.display = 'none';
         responderBox.style.display = 'block';
+        const qrCodeReader = new BrowserQRCodeReader();
+        qrScannerControl = await qrCodeReader.decodeFromVideoDevice(undefined, qrCodeVideo, async (result, err) => {
+            if (!err) {
+                const sharedSecret = result?.getText()!;
+                try {
+                    peerConfig = await createResponderConfig(sharedSecret);
+                    responderStatusBox.innerText = `Loaded shared secret with pairingId: ${peerConfig.pairingId}`;
+                    qrScannerControl?.stop();
+                } catch (e) {
+                    alert('Failed to load shared secret: ' + e);
+                }
+            }
+        });
+    } else {
+        qrScannerControl?.stop();
     }
 });
 
@@ -68,28 +85,10 @@ createSharedSecretButton.addEventListener('click', async () => {
     peerConfig = sharedSecretConfig.peerConfig;
 
     sharedSecretBox.innerText = `${sharedSecretConfig.secretBase64}`;
+    const qrCodeWriter = new BrowserQRCodeSvgWriter();
+    qrCodeWriter.writeToDom(sharedSecretBox, sharedSecretConfig.secretBase64, 256, 256);
 
     createSharedSecretButton.disabled = false;
-    initiatorRadio.disabled = false;
-    responderRadio.disabled = false;
-});
-
-loadSharedSecretButton.addEventListener('click', async () => {
-    sharedSecretInput.disabled = true;
-    loadSharedSecretButton.disabled = true;
-    initiatorRadio.disabled = true;
-    responderRadio.disabled = true;
-
-    const sharedSecret = sharedSecretInput.value;
-    try {
-        peerConfig = await createResponderConfig(sharedSecret);
-        responderStatusBox.innerText = `Loaded shared secret with pairingId: ${peerConfig.pairingId}`;
-    } catch (e) {
-        alert('Failed to load shared secret: ' + e);
-    }
-
-    sharedSecretInput.disabled = false;
-    loadSharedSecretButton.disabled = false;
     initiatorRadio.disabled = false;
     responderRadio.disabled = false;
 });

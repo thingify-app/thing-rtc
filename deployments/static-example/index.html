@@ -3,6 +3,7 @@
     <head>
         <title>ThingRTC</title>
         <link rel="stylesheet" href="app.css"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/> 
     </head>
     <body>
         <div class="box">
@@ -17,8 +18,7 @@
                 <div id="sharedSecret"></div>
             </div>
             <div id="responderBox">
-                <input type="text" id="sharedSecretInput"/>
-                <button id="loadSharedSecretButton">Load secret</button>
+                <p><video id="qrCodeVideo" autoplay playsinline></video></p>
                 <div id="responderStatus"></div>
             </div>
         </div>
