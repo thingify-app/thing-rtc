@@ -43,14 +43,19 @@ let speedTestActive = false;
 disconnectButton.disabled = true;
 initiatorBox.style.display = 'block';
 responderBox.style.display = 'none';
+qrCodeVideo.style.display = 'none';
 
 stopSpeedTestButton.disabled = true;
 
+// Create initial QR code:
+setupInitiator();
 
-initiatorRadio.addEventListener('change', () => {
+initiatorRadio.addEventListener('change', async () => {
     if (initiatorRadio.checked) {
         initiatorBox.style.display = 'block';
         responderBox.style.display = 'none';
+        qrScannerControl?.stop();
+        await setupInitiator();
     }
 });
 
@@ -58,39 +63,9 @@ responderRadio.addEventListener('change', async () => {
     if (responderRadio.checked) {
         initiatorBox.style.display = 'none';
         responderBox.style.display = 'block';
-        const qrCodeReader = new BrowserQRCodeReader();
-        qrScannerControl = await qrCodeReader.decodeFromVideoDevice(undefined, qrCodeVideo, async (result, err) => {
-            if (!err) {
-                const sharedSecret = result?.getText()!;
-                try {
-                    peerConfig = await createResponderConfig(sharedSecret);
-                    responderStatusBox.innerText = `Loaded shared secret with pairingId: ${peerConfig.pairingId}`;
-                    qrScannerControl?.stop();
-                } catch (e) {
-                    alert('Failed to load shared secret: ' + e);
-                }
-            }
-        });
-    } else {
-        qrScannerControl?.stop();
+        
+        await setupResponder();
     }
-});
-
-createSharedSecretButton.addEventListener('click', async () => {
-    createSharedSecretButton.disabled = true;
-    initiatorRadio.disabled = true;
-    responderRadio.disabled = true;
-
-    const sharedSecretConfig = await createInitiatorConfig();
-    peerConfig = sharedSecretConfig.peerConfig;
-
-    sharedSecretBox.innerText = `${sharedSecretConfig.secretBase64}`;
-    const qrCodeWriter = new BrowserQRCodeSvgWriter();
-    qrCodeWriter.writeToDom(sharedSecretBox, sharedSecretConfig.secretBase64, 256, 256);
-
-    createSharedSecretButton.disabled = false;
-    initiatorRadio.disabled = false;
-    responderRadio.disabled = false;
 });
 
 connectButton.addEventListener('click', async () => {
@@ -173,6 +148,34 @@ stopSpeedTestButton.addEventListener('click', () => {
     stopSpeedTestButton.disabled = true;
 });
 
+async function setupInitiator() {
+    const sharedSecretConfig = await createInitiatorConfig();
+    peerConfig = sharedSecretConfig.peerConfig;
+
+    const qrCodeWriter = new BrowserQRCodeSvgWriter();
+    sharedSecretBox.innerHTML = '';
+    qrCodeWriter.writeToDom(sharedSecretBox, sharedSecretConfig.secretBase64, 256, 256);
+}
+
+async function setupResponder() {
+    qrCodeVideo.style.display = 'block';
+
+    const qrCodeReader = new BrowserQRCodeReader();
+    qrScannerControl = await qrCodeReader.decodeFromVideoDevice(undefined, qrCodeVideo, async (result, err) => {
+        if (!err) {
+            const sharedSecret = result?.getText()!;
+            try {
+                peerConfig = await createResponderConfig(sharedSecret);
+                qrCodeVideo.style.display = 'none';
+                responderStatusBox.innerText = `Loaded shared secret.`;
+                qrScannerControl?.stop();
+            } catch (e) {
+                alert('Failed to load shared secret: ' + e);
+            }
+        }
+    });
+}
+
 async function getCamera(): Promise<MediaStream> {
     return await navigator.mediaDevices?.getUserMedia({video: true});
 }
@@ -218,11 +221,12 @@ function createPeer(peerConfig: PeerConfig): ThingPeer {
 }
 
 function formatBps(bytesPerSec: number): string {
-    if (bytesPerSec >= 1_000_000) {
-        return `${(bytesPerSec / 1_000_000).toFixed(2)}Mbps`;
-    } else if (bytesPerSec >= 1000) {
-        return `${(bytesPerSec / 1000).toFixed(2)}kbps`;
+    const bitsPerSec = bytesPerSec * 8;
+    if (bitsPerSec >= 1_000_000) {
+        return `${(bitsPerSec / 1_000_000).toFixed(2)}Mbps`;
+    } else if (bitsPerSec >= 1000) {
+        return `${(bitsPerSec / 1000).toFixed(2)}kbps`;
     } else {
-        return `${bytesPerSec.toFixed(2)}bps`;
+        return `${bitsPerSec.toFixed(2)}bps`;
     }
 }
