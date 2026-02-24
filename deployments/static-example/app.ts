@@ -7,7 +7,6 @@ const responderRadio = document.getElementById('responder') as HTMLInputElement;
 const initiatorBox = document.getElementById('initiatorBox') as HTMLDivElement;
 const responderBox = document.getElementById('responderBox') as HTMLDivElement;
 
-const createSharedSecretButton = document.getElementById('createSharedSecretButton') as HTMLButtonElement;
 const sharedSecretBox = document.getElementById('sharedSecret') as HTMLDivElement;
 
 const qrCodeVideo = document.getElementById('qrCodeVideo') as HTMLVideoElement;
@@ -25,6 +24,11 @@ const stopSpeedTestButton = document.getElementById('stopSpeedTestButton') as HT
 const receivedBytesBox = document.getElementById('receivedBytes') as HTMLDivElement;
 const sentBytesBox = document.getElementById('sentBytes') as HTMLDivElement;
 
+const fileUpload = document.getElementById('fileUpload') as HTMLInputElement;
+const receiveFileButton = document.getElementById('receiveFileButton') as HTMLButtonElement;
+const finishReceiveFileButton = document.getElementById('finishReceiveFileButton') as HTMLButtonElement;
+const fileTransferStatusBox = document.getElementById('fileTransferStatus') as HTMLDivElement;
+
 const localVideo = document.getElementById('localVideo') as HTMLVideoElement;
 const remoteVideo = document.getElementById('remoteVideo') as HTMLVideoElement;
 
@@ -39,6 +43,8 @@ let peer: ThingPeer|null = null;
 let qrScannerControl: IScannerControls|null = null;
 
 let speedTestActive = false;
+let savingFile: WritableStreamDefaultWriter|null = null;
+let receivedFileBytes = 0;
 
 disconnectButton.disabled = true;
 initiatorBox.style.display = 'block';
@@ -46,6 +52,7 @@ responderBox.style.display = 'none';
 qrCodeVideo.style.display = 'none';
 
 stopSpeedTestButton.disabled = true;
+finishReceiveFileButton.disabled = true;
 
 // Create initial QR code:
 setupInitiator();
@@ -148,6 +155,50 @@ stopSpeedTestButton.addEventListener('click', () => {
     stopSpeedTestButton.disabled = true;
 });
 
+fileUpload.addEventListener('change', async () => {
+    const files = fileUpload.files;
+    console.log(files);
+    if (!files || files.length !== 1) {
+        alert('Unexpected number of files selected!');
+        return;
+    }
+
+    const fileReader = files[0].stream().getReader();
+    while (true) {
+        const chunk = await fileReader.read();
+        if (chunk.done) {
+            break;
+        }
+
+        const chunkLength = chunk.value.byteLength;
+        console.log(chunkLength);
+
+        const SUB_CHUNK_SIZE = 16384;
+        for (let i = 0; i < chunkLength; i += SUB_CHUNK_SIZE) {
+            const subChunk = chunk.value.buffer.slice(i, Math.min(i + SUB_CHUNK_SIZE, chunkLength));
+            console.log(`Sending subchunk of length ${subChunk.byteLength}`);
+            await peer?.sendMessage(subChunk);
+        }
+    }
+});
+
+receiveFileButton.addEventListener('click', async () => {
+    const handle = await window.showSaveFilePicker({suggestedName: 'download.dat'});
+    savingFile = (await handle.createWritable()).getWriter();
+
+    receivedFileBytes = 0;
+    receiveFileButton.disabled = true;
+    finishReceiveFileButton.disabled = false;
+});
+
+finishReceiveFileButton.addEventListener('click', async () => {
+    await savingFile.close();
+    savingFile = null;
+    alert('File written');
+    receiveFileButton.disabled = false;
+    finishReceiveFileButton.disabled = true;
+});
+
 async function setupInitiator() {
     const sharedSecretConfig = await createInitiatorConfig();
     peerConfig = sharedSecretConfig.peerConfig;
@@ -198,8 +249,13 @@ function createPeer(peerConfig: PeerConfig): ThingPeer {
     // Using binary messages for speed test:
     let bytesReceived = 0;
     let measureStartTime = Date.now();
-    peer.on('binaryMessage', message => {
+    peer.on('binaryMessage', async message => {
+        if (savingFile) {
+            await savingFile.write(message);
+        }
+
         bytesReceived += message.byteLength;
+        receivedFileBytes += message.byteLength;
 
         const currentTime = Date.now();
         const elapsedTime = currentTime - measureStartTime;
@@ -208,6 +264,8 @@ function createPeer(peerConfig: PeerConfig): ThingPeer {
             receivedBytesBox.innerText = `Received: ${formatBps(bytesPerSec)}`;
             bytesReceived = 0;
             measureStartTime = currentTime;
+
+            fileTransferStatusBox.innerText = `Received ${formatSIPrefix(receivedFileBytes)}B of file.`;
         }
     });
 
@@ -222,11 +280,15 @@ function createPeer(peerConfig: PeerConfig): ThingPeer {
 
 function formatBps(bytesPerSec: number): string {
     const bitsPerSec = bytesPerSec * 8;
-    if (bitsPerSec >= 1_000_000) {
-        return `${(bitsPerSec / 1_000_000).toFixed(2)}Mbps`;
-    } else if (bitsPerSec >= 1000) {
-        return `${(bitsPerSec / 1000).toFixed(2)}kbps`;
+    return `${formatSIPrefix(bitsPerSec)}bps`;
+}
+
+function formatSIPrefix(value: number): string {
+    if (value >= 1_000_000) {
+        return `${(value / 1_000_000).toFixed(2)}M`;
+    } else if (value >= 1000) {
+        return `${(value / 1000).toFixed(2)}k`;
     } else {
-        return `${bitsPerSec.toFixed(2)}bps`;
+        return value.toFixed(2);
     }
 }
