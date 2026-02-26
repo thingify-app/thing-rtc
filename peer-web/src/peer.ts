@@ -44,7 +44,7 @@ export class ThingPeer {
     on(type: 'connectionStateChanged', callback: (state: ConnectionState) => void): void;
     on(type: 'mediaStream', callback: (mediaStream: MediaStreamTrack) => void): void;
     on(type: 'stringMessage', callback: (message: string) => void): void;
-    on(type: 'binaryMessage', callback: (message: Uint8Array) => void): void;
+    on(type: 'binaryMessage', callback: (message: ArrayBuffer) => void): void;
     on(type: string, callback: any): void {
         switch (type) {
             case 'connectionStateChanged':
