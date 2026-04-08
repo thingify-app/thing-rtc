@@ -56,7 +56,7 @@ async function handlePairingRoute(req: Request): Promise<Response> {
 async function handleSignallingRoute(req: Request): Promise<Response> {
   try {
     const { socket, response } = toWebSocket(req);
-    const signallingServer = new SignallingServer(await getPublicKey());
+    const signallingServer = new SignallingServer();
 
     socket.onopen = () => signallingServer.handleConnection(socket);
     

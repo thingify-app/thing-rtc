@@ -5,7 +5,7 @@ import { BroadcastChannelConnectionChannelFactory } from './connection-channel.t
 export class SignallingServer {
     private server: Server;
 
-    constructor(publicKey: CryptoKey) {
+    constructor() {
         const authValidator = new ParseThroughAuthValidator();
         this.server = new Server(authValidator, new BroadcastChannelConnectionChannelFactory());
     }
