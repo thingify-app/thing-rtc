@@ -32,8 +32,21 @@ export async function createInitiatorConfig(): Promise<SharedSecretConfig> {
     };
 }
 
+export async function createInitiatorConfigWithSecret(sharedKeyBase64: string): Promise<PeerConfig> {
+    const keyBytes = decode(sharedKeyBase64);
+    const peerAuth = await SharedSecretPeerAuth.create(keyBytes);
+    const pairingIdBytes = await subtle.digest('SHA-256', keyBytes);
+    const pairingId = encode(pairingIdBytes);
+
+    return {
+        pairingId,
+        peerAuth,
+        role: 'initiator',
+    };
+}
+
 export async function createResponderConfig(sharedKeyBase64: string): Promise<PeerConfig> {
-    const keyBytes = decode(sharedKeyBase64)
+    const keyBytes = decode(sharedKeyBase64);
 
     // For shared secret keys, we use the hash of the key as the pairing ID:
     const pairingIdBytes = await subtle.digest('SHA-256', keyBytes);
@@ -45,7 +58,7 @@ export async function createResponderConfig(sharedKeyBase64: string): Promise<Pe
         pairingId,
         peerAuth,
         role: 'responder',
-    }
+    };
 }
 
 export class SharedSecretPeerAuth implements PeerAuth {

@@ -11,3 +11,7 @@ body {
 video {
     width: 100%;
 }
+
+#qrCodeVideo {
+    width: 200px;
+}

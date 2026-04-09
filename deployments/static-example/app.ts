@@ -1,4 +1,4 @@
-import { createInitiatorConfig, createResponderConfig, InsecureServerAuth, PeerConfig, ThingPeer } from 'thingrtc-peer';
+import { createInitiatorConfig, createInitiatorConfigWithSecret, createResponderConfig, InsecureServerAuth, PeerConfig, SharedSecretConfig, ThingPeer } from 'thingrtc-peer';
 import { BrowserQRCodeReader, BrowserQRCodeSvgWriter, IScannerControls } from '@zxing/browser';
 
 const initiatorRadio = document.getElementById('initiator') as HTMLInputElement;
@@ -9,8 +9,13 @@ const responderBox = document.getElementById('responderBox') as HTMLDivElement;
 
 const sharedSecretBox = document.getElementById('sharedSecret') as HTMLDivElement;
 
+const responderSharedSecretText = document.getElementById('responderSharedSecret') as HTMLInputElement;
+const setSharedSecretButton = document.getElementById('setSharedSecretButton') as HTMLButtonElement;
 const qrCodeVideo = document.getElementById('qrCodeVideo') as HTMLVideoElement;
 const responderStatusBox = document.getElementById('responderStatus') as HTMLDivElement;;
+
+const saveConfigButton = document.getElementById('saveConfigButton') as HTMLButtonElement;
+const clearConfigButton = document.getElementById('clearConfigButton') as HTMLButtonElement;
 
 const sendVideoCheckbox = document.getElementById('sendVideo') as HTMLInputElement;
 const connectButton = document.getElementById('connectButton') as HTMLButtonElement;
@@ -37,7 +42,9 @@ const remoteMediaStream = new MediaStream();
 const localhost = location.hostname === 'localhost';
 const signallingServer = localhost ? `ws://localhost:8000/signalling` : `wss://dev.thingify.app/signalling`;
 
-let peerConfig: PeerConfig|null = null;
+const sharedSecretStorageKey = 'SHARED_SECRET_STORAGE';
+
+let sharedSecretConfig: SharedSecretConfig|null = null;
 let peer: ThingPeer|null = null;
 
 let qrScannerControl: IScannerControls|null = null;
@@ -54,8 +61,7 @@ qrCodeVideo.style.display = 'none';
 stopSpeedTestButton.disabled = true;
 finishReceiveFileButton.disabled = true;
 
-// Create initial QR code:
-setupInitiator();
+setup();
 
 initiatorRadio.addEventListener('change', async () => {
     if (initiatorRadio.checked) {
@@ -75,18 +81,44 @@ responderRadio.addEventListener('change', async () => {
     }
 });
 
+setSharedSecretButton.addEventListener('click', async () => {
+    const peerConfig = await createResponderConfig(responderSharedSecretText.value);
+    sharedSecretConfig = {
+        peerConfig,
+        secretBase64: responderSharedSecretText.value,
+    };
+});
+
+saveConfigButton.addEventListener('click', async () => {
+    if (!sharedSecretConfig) {
+        alert('No peer config set!');
+    }
+    window.localStorage.setItem(sharedSecretStorageKey, sharedSecretConfig!.secretBase64);
+
+    // Reload UI to show config:
+    await setup();
+});
+
+clearConfigButton.addEventListener('click', async () => {
+    window.localStorage.removeItem(sharedSecretStorageKey);
+    sharedSecretConfig = null;
+
+    // Reload UI to show config:
+    await setup();
+});
+
 connectButton.addEventListener('click', async () => {
     if (peer) {
         alert('Peer already exists - disconnect first');
         return;
     }
 
-    if (!peerConfig) {
+    if (!sharedSecretConfig) {
         alert('Peer not configured!');
         return;
     }
 
-    peer = createPeer(peerConfig);
+    peer = createPeer(sharedSecretConfig.peerConfig);
 
     connectButton.disabled = true;
     disconnectButton.disabled = false;
@@ -192,39 +224,74 @@ receiveFileButton.addEventListener('click', async () => {
 });
 
 finishReceiveFileButton.addEventListener('click', async () => {
-    await savingFile.close();
+    await savingFile?.close();
     savingFile = null;
     alert('File written');
     receiveFileButton.disabled = false;
     finishReceiveFileButton.disabled = true;
 });
 
+async function setup() {
+    if (initiatorRadio.checked) {
+        await setupInitiator();
+    } else {
+        await setupResponder();
+    }
+}
+
 async function setupInitiator() {
-    const sharedSecretConfig = await createInitiatorConfig();
-    peerConfig = sharedSecretConfig.peerConfig;
+    const sharedSecret = loadSharedSecret();
+
+    if (sharedSecret) {
+        const peerConfig = await createInitiatorConfigWithSecret(sharedSecret);
+        sharedSecretConfig = {
+            peerConfig,
+            secretBase64: sharedSecret,
+        };
+    } else {
+        sharedSecretConfig = await createInitiatorConfig();
+    }
 
     const qrCodeWriter = new BrowserQRCodeSvgWriter();
     sharedSecretBox.innerHTML = '';
     qrCodeWriter.writeToDom(sharedSecretBox, sharedSecretConfig.secretBase64, 256, 256);
+    sharedSecretBox.appendChild(document.createTextNode(sharedSecretConfig.secretBase64));
 }
 
 async function setupResponder() {
-    qrCodeVideo.style.display = 'block';
+    const sharedSecret = loadSharedSecret();
 
-    const qrCodeReader = new BrowserQRCodeReader();
-    qrScannerControl = await qrCodeReader.decodeFromVideoDevice(undefined, qrCodeVideo, async (result, err) => {
-        if (!err) {
-            const sharedSecret = result?.getText()!;
-            try {
-                peerConfig = await createResponderConfig(sharedSecret);
-                qrCodeVideo.style.display = 'none';
-                responderStatusBox.innerText = `Loaded shared secret.`;
-                qrScannerControl?.stop();
-            } catch (e) {
-                alert('Failed to load shared secret: ' + e);
+    if (sharedSecret) {
+        await loadResponderConfig(sharedSecret);
+    } else {
+        qrCodeVideo.style.display = 'block';
+        const qrCodeReader = new BrowserQRCodeReader();
+        qrScannerControl = await qrCodeReader.decodeFromVideoDevice(undefined, qrCodeVideo, async (result, err) => {
+            if (!err) {
+                const sharedSecret = result?.getText()!;
+                try {
+                    await loadResponderConfig(sharedSecret);                    
+                } catch (e) {
+                    alert('Failed to load shared secret: ' + e);
+                }
             }
-        }
-    });
+        });
+    }
+}
+
+async function loadResponderConfig(sharedSecret: string) {
+    const peerConfig = await createResponderConfig(sharedSecret);
+    sharedSecretConfig = {
+        peerConfig,
+        secretBase64: sharedSecret,
+    };
+    qrCodeVideo.style.display = 'none';
+    responderStatusBox.innerText = `Loaded shared secret.`;
+    qrScannerControl?.stop();
+}
+
+function loadSharedSecret(): string|null {
+    return window.localStorage.getItem(sharedSecretStorageKey);
 }
 
 async function getCamera(): Promise<MediaStream> {
@@ -233,7 +300,7 @@ async function getCamera(): Promise<MediaStream> {
 
 function createPeer(peerConfig: PeerConfig): ThingPeer {
     const serverAuth = new InsecureServerAuth(peerConfig.pairingId, peerConfig.role);
-    const peer = new ThingPeer(signallingServer, serverAuth, peerConfig, true);
+    const peer = new ThingPeer(signallingServer, serverAuth, peerConfig);
 
     peer.on('connectionStateChanged', state => {
         console.log(`Peer connection state: ${state}`);
