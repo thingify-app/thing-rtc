@@ -8,7 +8,7 @@ import (
 	"github.com/pion/webrtc/v3"
 
 	"github.com/thingify-app/thing-rtc/peer-go/codec"
-	"github.com/thingify-app/thing-rtc/peer-go/pairing"
+	peerconfig "github.com/thingify-app/thing-rtc/peer-go/peer-config"
 )
 
 type peerTask struct {
@@ -28,12 +28,12 @@ type peerTask struct {
 
 // Attempts to connect to a peer once, and blocks until the connection fails for any reason.
 // Must not be called again on the same instance.
-func (p *peerTask) AttemptConnect(tokenGenerator pairing.TokenGenerator) error {
+func (p *peerTask) AttemptConnect(serverAuth ServerAuth, peerConfig *peerconfig.PeerConfig) error {
 	serverFailed := make(chan interface{})
 	peerConnectionFailed := make(chan interface{})
 	peerConnectionSuccess := make(chan interface{})
 
-	server := NewSignallingServer(p.serverUrl, tokenGenerator)
+	server := NewSignallingServer(p.serverUrl, serverAuth, peerConfig.PeerAuth)
 	peerConnection, err := createPeerConnection(p.codecs)
 	if err != nil {
 		return err
@@ -57,7 +57,7 @@ func (p *peerTask) AttemptConnect(tokenGenerator pairing.TokenGenerator) error {
 		}
 	})
 
-	err = p.setupListeners(tokenGenerator.GetRole())
+	err = p.setupListeners(string(peerConfig.Role))
 	if err != nil {
 		return err
 	}

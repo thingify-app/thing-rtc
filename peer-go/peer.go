@@ -6,7 +6,7 @@ import (
 
 	"github.com/pion/webrtc/v3"
 	"github.com/thingify-app/thing-rtc/peer-go/codec"
-	"github.com/thingify-app/thing-rtc/peer-go/pairing"
+	peerconfig "github.com/thingify-app/thing-rtc/peer-go/peer-config"
 )
 
 // Peer represents a connection (attempted or actual) to a ThingRTC peer.
@@ -23,18 +23,19 @@ type Peer interface {
 	SendBinaryMessage(message []byte)
 }
 
-func NewPeer(serverUrl string, tokenGenerator pairing.TokenGenerator) Peer {
-	return NewPeerWithMedia(serverUrl, tokenGenerator)
+func NewPeer(serverUrl string, serverAuth ServerAuth, peerConfig *peerconfig.PeerConfig) Peer {
+	return NewPeerWithMedia(serverUrl, serverAuth, peerConfig)
 }
 
-func NewPeerWithMedia(serverUrl string, tokenGenerator pairing.TokenGenerator, sources ...*MediaSource) Peer {
+func NewPeerWithMedia(serverUrl string, serverAuth ServerAuth, peerConfig *peerconfig.PeerConfig, sources ...*MediaSource) Peer {
 	// Only map sources to tracks once at initialisation - otherwise we break Pion driver state.
 	codecs, tracks := sourcesToCodecsTracks(sources)
 	return &peerImpl{
-		serverUrl:      serverUrl,
-		tokenGenerator: tokenGenerator,
-		codecs:         codecs,
-		tracks:         tracks,
+		serverUrl:  serverUrl,
+		serverAuth: serverAuth,
+		peerConfig: peerConfig,
+		codecs:     codecs,
+		tracks:     tracks,
 
 		// Initialise listeners as empty functions to allow them to be optional.
 		connectionStateListener: func(connectionState int) {},
@@ -59,10 +60,11 @@ func sourcesToCodecsTracks(sources []*MediaSource) ([]*codec.Codec, []webrtc.Tra
 }
 
 type peerImpl struct {
-	serverUrl      string
-	tokenGenerator pairing.TokenGenerator
-	codecs         []*codec.Codec
-	tracks         []webrtc.TrackLocal
+	serverUrl  string
+	serverAuth ServerAuth
+	peerConfig *peerconfig.PeerConfig
+	codecs     []*codec.Codec
+	tracks     []webrtc.TrackLocal
 
 	peerTask  *peerTask
 	connected bool
@@ -100,7 +102,7 @@ func (p *peerImpl) Connect() {
 					binaryMessageListener:   func(message []byte) { go p.binaryMessageListener(message) },
 					errorListener:           func(err error) { go p.errorListener(err) },
 				}
-				err := p.peerTask.AttemptConnect(p.tokenGenerator)
+				err := p.peerTask.AttemptConnect(p.serverAuth, p.peerConfig)
 				if err != nil {
 					p.errorListener(err)
 				}

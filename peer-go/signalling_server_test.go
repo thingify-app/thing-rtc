@@ -19,16 +19,6 @@ type Message struct {
 	Data      string
 }
 
-func newTokenGenerator() MockTokenGenerator {
-	return MockTokenGenerator{
-		Role:         "initiator",
-		PairingId:    "pairingId",
-		Nonce:        "nonce",
-		Signature:    "signature",
-		VerifyResult: true,
-	}
-}
-
 func TestSuccessfulOfferExchange(t *testing.T) {
 	actions := func(conn *websocket.Conn) {
 		// Assert that auth message is received
@@ -84,7 +74,7 @@ func TestSuccessfulOfferExchange(t *testing.T) {
 		// Assert close is received
 	}
 
-	signallingServer, channels := createSignallingServer(newTokenGenerator(), actions)
+	signallingServer, channels := createSignallingServer(actions)
 	signallingServer.Connect()
 
 	select {
@@ -147,7 +137,7 @@ func TestSuccessfulAnswerExchange(t *testing.T) {
 		// Assert close is received
 	}
 
-	signallingServer, channels := createSignallingServer(newTokenGenerator(), actions)
+	signallingServer, channels := createSignallingServer(actions)
 	signallingServer.Connect()
 
 	select {
@@ -210,7 +200,7 @@ func TestSuccessfulIceCandidateExchange(t *testing.T) {
 		// Assert close is received
 	}
 
-	signallingServer, channels := createSignallingServer(newTokenGenerator(), actions)
+	signallingServer, channels := createSignallingServer(actions)
 	signallingServer.Connect()
 
 	select {
@@ -244,7 +234,7 @@ func TestMissingPeerConnectNonce(t *testing.T) {
 		conn.WriteJSON(&peerConnect)
 	}
 
-	signallingServer, channels := createSignallingServer(newTokenGenerator(), actions)
+	signallingServer, channels := createSignallingServer(actions)
 	signallingServer.Connect()
 
 	select {
@@ -275,7 +265,7 @@ func TestInvalidDataMessageNonce(t *testing.T) {
 		conn.WriteJSON(&offer)
 	}
 
-	signallingServer, channels := createSignallingServer(newTokenGenerator(), actions)
+	signallingServer, channels := createSignallingServer(actions)
 	signallingServer.Connect()
 
 	select {
@@ -313,7 +303,7 @@ func TestMissingDataMessageNonce(t *testing.T) {
 		conn.WriteJSON(&offer)
 	}
 
-	signallingServer, channels := createSignallingServer(newTokenGenerator(), actions)
+	signallingServer, channels := createSignallingServer(actions)
 	signallingServer.Connect()
 
 	select {
@@ -332,8 +322,14 @@ func TestMissingDataMessageNonce(t *testing.T) {
 }
 
 func TestInvalidSignatureMessage(t *testing.T) {
-	tokenGenerator := newTokenGenerator()
-	tokenGenerator.VerifyResult = false
+	serverAuth := MockServerAuth{
+		Token: "token",
+	}
+	peerAuth := &MockPeerAuth{
+		Nonce:        "nonce",
+		Signature:    "foobar",
+		VerifyResult: false,
+	}
 
 	actions := func(conn *websocket.Conn) {
 		// Consume auth message
@@ -356,7 +352,7 @@ func TestInvalidSignatureMessage(t *testing.T) {
 		// Assert close is received
 	}
 
-	signallingServer, channels := createSignallingServer(tokenGenerator, actions)
+	signallingServer, channels := createSignallingServerWithAuth(serverAuth, peerAuth, actions)
 	signallingServer.Connect()
 
 	select {
@@ -393,7 +389,7 @@ func TestSendMessageConcurrentRace(t *testing.T) {
 		}
 	}
 
-	signallingServer, channels := createSignallingServer(newTokenGenerator(), actions)
+	signallingServer, channels := createSignallingServer(actions)
 	signallingServer.Connect()
 
 	select {

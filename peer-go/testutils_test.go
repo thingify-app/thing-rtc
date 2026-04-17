@@ -7,39 +7,33 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v3"
-	"github.com/thingify-app/thing-rtc/peer-go/pairing"
+	peerconfig "github.com/thingify-app/thing-rtc/peer-go/peer-config"
 )
 
-type MockTokenGenerator struct {
-	Role         string
-	PairingId    string
+type MockPeerAuth struct {
 	Nonce        string
 	Signature    string
 	VerifyResult bool
 }
 
-func (m MockTokenGenerator) GenerateToken() string {
-	return "token"
-}
-
-func (m MockTokenGenerator) GetPairingId() string {
-	return m.PairingId
-}
-
-func (m MockTokenGenerator) GetRole() string {
-	return m.Role
-}
-
-func (m MockTokenGenerator) GenerateNonce() string {
-	return m.Nonce
-}
-
-func (m MockTokenGenerator) SignMessage(message string) (string, error) {
+func (m MockPeerAuth) SignMessage(message string) (string, error) {
 	return m.Signature, nil
 }
 
-func (m MockTokenGenerator) VerifyMessage(base64Signature string, message string) bool {
+func (m MockPeerAuth) VerifyMessage(base64Signature string, message string) bool {
 	return m.VerifyResult
+}
+
+func (m MockPeerAuth) GenerateNonce() string {
+	return m.Nonce
+}
+
+type MockServerAuth struct {
+	Token string
+}
+
+func (m MockServerAuth) GenerateToken() string {
+	return m.Token
 }
 
 type ServerChannels struct {
@@ -66,12 +60,25 @@ func createWebsocketServer(actions func(conn *websocket.Conn)) *httptest.Server 
 	return httptest.NewServer(http.HandlerFunc(handler))
 }
 
-func createSignallingServer(tokenGenerator pairing.TokenGenerator, actions func(conn *websocket.Conn)) (*SignallingServer, *ServerChannels) {
+func createSignallingServer(actions func(conn *websocket.Conn)) (*SignallingServer, *ServerChannels) {
+	serverAuth := MockServerAuth{
+		Token: "token",
+	}
+	peerAuth := MockPeerAuth{
+		Nonce:        "nonce",
+		Signature:    "signature",
+		VerifyResult: true,
+	}
+
+	return createSignallingServerWithAuth(serverAuth, peerAuth, actions)
+}
+
+func createSignallingServerWithAuth(serverAuth ServerAuth, peerAuth peerconfig.PeerAuth, actions func(conn *websocket.Conn)) (*SignallingServer, *ServerChannels) {
 	server := createWebsocketServer(actions)
 	// SignallingServer requires a "ws://" URL rather than "http://"
 	url := strings.Replace(server.URL, "http", "ws", 1)
 
-	signallingServer := NewSignallingServer(url, tokenGenerator)
+	signallingServer := NewSignallingServer(url, serverAuth, peerAuth)
 
 	peerConnect := make(chan interface{})
 	peerDisconnect := make(chan interface{})

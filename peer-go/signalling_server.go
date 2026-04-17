@@ -8,7 +8,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v3"
-	"github.com/thingify-app/thing-rtc/peer-go/pairing"
+	peerconfig "github.com/thingify-app/thing-rtc/peer-go/peer-config"
 )
 
 // SignallingServer handles signalling communications to establish a connection
@@ -18,8 +18,9 @@ import (
 // If there are any failures in the connection or processing of messages, it
 // will report these and return to a disconnected state.
 type SignallingServer struct {
-	URL            string
-	TokenGenerator pairing.TokenGenerator
+	URL        string
+	ServerAuth ServerAuth
+	PeerAuth   peerconfig.PeerAuth
 
 	socket      *websocket.Conn
 	connected   bool
@@ -35,10 +36,11 @@ type SignallingServer struct {
 	errorListener          func(err error)
 }
 
-func NewSignallingServer(serverUrl string, tokenGenerator pairing.TokenGenerator) SignallingServer {
+func NewSignallingServer(serverUrl string, serverAuth ServerAuth, peerAuth peerconfig.PeerAuth) SignallingServer {
 	return SignallingServer{
-		URL:            serverUrl,
-		TokenGenerator: tokenGenerator,
+		URL:        serverUrl,
+		ServerAuth: serverAuth,
+		PeerAuth:   peerAuth,
 
 		sendChan: make(chan interface{}),
 
@@ -73,8 +75,8 @@ func (s *SignallingServer) Connect() {
 
 		s.startSendLoop()
 
-		localNonce := s.TokenGenerator.GenerateNonce()
-		token := s.TokenGenerator.GenerateToken()
+		localNonce := s.PeerAuth.GenerateNonce()
+		token := s.ServerAuth.GenerateToken()
 		err = s.sendAuthMessage(localNonce, token)
 		if err != nil {
 			s.errorListener(err)
@@ -189,7 +191,7 @@ func (s *SignallingServer) sendSignedMessage(msgType string, data interface{}) e
 
 	jsonData := string(jsonBytes)
 
-	signature, err := s.TokenGenerator.SignMessage(jsonData)
+	signature, err := s.PeerAuth.SignMessage(jsonData)
 	if err != nil {
 		return err
 	}
@@ -282,7 +284,7 @@ func (s *SignallingServer) verifyMessage(localNonce string, message signedMessag
 		return fmt.Errorf("invalid nonce received: '%v', expected: '%v'", nonceData.Nonce, localNonce)
 	}
 
-	validSignature := s.TokenGenerator.VerifyMessage(message.Signature, message.Data)
+	validSignature := s.PeerAuth.VerifyMessage(message.Signature, message.Data)
 	if !validSignature {
 		return fmt.Errorf("invalid signature '%v' on message: '%v'", message.Signature, message.Data)
 	}
