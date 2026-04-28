@@ -186,7 +186,7 @@ func (p *peerTask) setupCommon() error {
 
 	ordered := false
 	maxRetransmits := uint16(0)
-	negotiated := true
+	negotiated := false
 	id := uint16(0)
 	options := &webrtc.DataChannelInit{
 		Ordered:        &ordered,
