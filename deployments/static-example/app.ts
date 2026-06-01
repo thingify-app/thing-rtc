@@ -1,4 +1,4 @@
-import { createInitiatorConfig, createInitiatorConfigWithSecret, createResponderConfig, InsecureServerAuth, PeerConfig, SharedSecretConfig, ThingPeer } from 'thingrtc-peer';
+import { createInitiatorConfig, createInitiatorConfigWithSecret, createResponderConfig, InsecureServerAuth, Listeners, PeerConfig, SharedSecretConfig, ThingPeer } from 'thingrtc-peer';
 import { BrowserQRCodeReader, BrowserQRCodeSvgWriter, IScannerControls } from '@zxing/browser';
 
 const initiatorRadio = document.getElementById('initiator') as HTMLInputElement;
@@ -300,49 +300,51 @@ async function getCamera(): Promise<MediaStream> {
 
 function createPeer(peerConfig: PeerConfig): ThingPeer {
     const serverAuth = new InsecureServerAuth(peerConfig.pairingId, peerConfig.role);
-    const peer = new ThingPeer(signallingServer, serverAuth, peerConfig);
-
-    peer.on('connectionStateChanged', state => {
-        console.log(`Peer connection state: ${state}`);
-        if (state === 'disconnected') {
-            remoteMediaStream.getTracks().forEach(track => remoteMediaStream.removeTrack(track));
-        }
-    });
-
-    peer.on('stringMessage', message => {
-        console.log(`String message received: ${message}`);
-    });
 
     // Using binary messages for speed test:
     let bytesReceived = 0;
     let measureStartTime = Date.now();
-    peer.on('binaryMessage', async message => {
-        if (savingFile) {
-            await savingFile.write(message);
+
+    const listeners: Listeners = {
+        connectionStateListener: state => {
+            console.log(`Peer connection state: ${state}`);
+            if (state === 'disconnected') {
+                remoteMediaStream.getTracks().forEach(track => remoteMediaStream.removeTrack(track));
+            }
+        },
+
+        stringMessageListener: message => {
+            console.log(`String message received: ${message}`);
+        },
+
+        binaryMessageListener: async message => {
+            if (savingFile) {
+                await savingFile.write(message);
+            }
+
+            bytesReceived += message.byteLength;
+            receivedFileBytes += message.byteLength;
+
+            const currentTime = Date.now();
+            const elapsedTime = currentTime - measureStartTime;
+            if (elapsedTime >= 1000) {
+                const bytesPerSec = bytesReceived / (elapsedTime / 1000);
+                receivedBytesBox.innerText = `Received: ${formatBps(bytesPerSec)}`;
+                bytesReceived = 0;
+                measureStartTime = currentTime;
+
+                fileTransferStatusBox.innerText = `Received ${formatSIPrefix(receivedFileBytes)}B of file.`;
+            }
+        },
+
+        mediaStreamListener: track => {
+            console.log('Received track');
+            remoteMediaStream.addTrack(track);
+            remoteVideo.srcObject = remoteMediaStream;
         }
+    };
 
-        bytesReceived += message.byteLength;
-        receivedFileBytes += message.byteLength;
-
-        const currentTime = Date.now();
-        const elapsedTime = currentTime - measureStartTime;
-        if (elapsedTime >= 1000) {
-            const bytesPerSec = bytesReceived / (elapsedTime / 1000);
-            receivedBytesBox.innerText = `Received: ${formatBps(bytesPerSec)}`;
-            bytesReceived = 0;
-            measureStartTime = currentTime;
-
-            fileTransferStatusBox.innerText = `Received ${formatSIPrefix(receivedFileBytes)}B of file.`;
-        }
-    });
-
-    peer.on('mediaStream', track => {
-        console.log('Received track');
-        remoteMediaStream.addTrack(track);
-        remoteVideo.srcObject = remoteMediaStream;
-    });
-
-    return peer;
+    return new ThingPeer(signallingServer, serverAuth, peerConfig, listeners);
 }
 
 function formatBps(bytesPerSec: number): string {

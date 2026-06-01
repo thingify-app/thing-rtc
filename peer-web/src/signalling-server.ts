@@ -1,13 +1,10 @@
 import { generateNonce } from "./nonce-generator";
 import { PeerAuth } from "./peer-config/peer-auth";
-import { ConstantRetry, Retry } from "./retry";
 import { ServerAuth } from "./server-auth";
 
 /** Abstracts two-way communication with the Signalling Server. */
 export class SignallingServer {
     private socket?: WebSocket;
-    private state: State = 'disconnected';
-    private retry: Retry = new ConstantRetry();
     private messageQueue: {type: string, data: object}[] = [];
     private localNonce?: string;
     private remoteNonce?: string;
@@ -18,6 +15,7 @@ export class SignallingServer {
     private answerListener?: (answer: RTCSessionDescriptionInit) => void;
     private peerDisconnectListener?: () => void;
     private errorListener?: () => void;
+    private closeListener?: () => void;
 
     constructor(
         private serverUrl: string,
@@ -28,7 +26,6 @@ export class SignallingServer {
     ) {}
 
     connect(): void {
-        this.state = 'connected';
         const url = `${this.serverUrl}/${this.pairingId}`;
         this.socket = new WebSocket(url);
         this.socket.addEventListener('open', async () => {
@@ -37,28 +34,21 @@ export class SignallingServer {
             // TODO: look into whether we need to await some kind of auth confirmation.
             this.flushQueue();
         });
-        this.socket.addEventListener('message', event => {
-            this.handleMessage(event.data);
+        this.socket.addEventListener('message', async event => {
+            try {
+                await this.handleMessage(event.data);
+            } catch (e) {
+                this.disconnect();
+            }
         });
         this.socket.addEventListener('error', () => {
             console.log('Socket error.');
-            this.retryConnect();
+            this.errorListener?.();
         });
         this.socket.addEventListener('close', () => {
             console.log('Socket close.');
-            this.retryConnect();
+            this.closeListener?.();
         });
-    }
-
-    private retryConnect() {
-        // Only retry if we are still actively trying to maintain a connection,
-        // otherwise ourselves disconnecting will endlessly trigger this.
-        if (this.state === 'connected') {
-            this.retry.retry(() => {
-                this.socket?.close();
-                this.connect();
-            });
-        }
     }
 
     private sendAuthMessage(token: string) {
@@ -131,6 +121,7 @@ export class SignallingServer {
     on(type: 'answer', callback: (answer: RTCSessionDescriptionInit) => void): void;
     on(type: 'peerDisconnect', callback: () => void): void;
     on(type: 'error', callback: () => void): void;
+    on(type: 'close', callback: () => void): void;
     on(type: string, callback: any) {
         switch (type) {
             case 'peerConnect':
@@ -150,6 +141,9 @@ export class SignallingServer {
                 break;
             case 'error':
                 this.errorListener = callback;
+                break;
+            case 'close':
+                this.closeListener = callback;
                 break;
             default:
                 throw new Error(`Unknown event type: ${type}`);
@@ -215,15 +209,8 @@ export class SignallingServer {
     }
 
     disconnect(): void {
-        this.state = 'disconnected';
         this.socket?.close();
         this.socket = undefined;
         this.messageQueue = [];
     }
 }
-
-/**
- * Current desired state - connected meaning that we want to be connected, not
- * necessarily that we are connected.
- */
-type State = 'disconnected' | 'connected';

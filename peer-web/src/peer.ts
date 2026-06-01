@@ -1,36 +1,52 @@
-import { PeerConfig } from "./peer-config/peer-config";
+import { PeerConfig, Role } from "./peer-config/peer-config";
 import { ServerAuth } from "./server-auth";
 import { SignallingServer } from "./signalling-server";
+
+export interface Listeners {
+    connectionStateListener?: (state: ConnectionState) => void;
+    mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
+    stringMessageListener?: (message: string) => void;
+    binaryMessageListener?: (message: ArrayBuffer) => void;
+    errorListener?: (error: string) => void;
+}
 
 /** Wraps the entire process of setting up a P2P connection. */
 export class ThingPeer {
     private peerTasks?: PeerTasks;
-    private connectionStateListener?: (state: ConnectionState) => void;
-    private mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
-    private stringMessageListener?: (message: string) => void;
-    private binaryMessageListener?: (message: ArrayBuffer) => void;
+    private connected = false;
 
     constructor(
         private serverUrl: string,
         private serverAuth: ServerAuth,
         private peerConfig: PeerConfig,
+        private listeners: Listeners,
         private reliableDataChannel: boolean = false,
+        private autoReconnect: boolean = true,
     ) {}
 
     connect(mediaStreams: MediaStream[]) {
-        const server = new SignallingServer(
-            this.serverUrl,
-            this.serverAuth,
-            this.peerConfig.peerAuth,
-            this.peerConfig.pairingId
-        );
-        this.peerTasks = this.peerConfig.role === 'initiator'
-            ? new InitiatorPeerTasks(server, mediaStreams, this.reliableDataChannel)
-            : new ResponderPeerTasks(server, mediaStreams, this.reliableDataChannel);
-        this.peerTasks.connectionStateListener = this.connectionStateListener;
-        this.peerTasks.mediaStreamListener = this.mediaStreamListener;
-        this.peerTasks.stringMessageListener = this.stringMessageListener;
-        this.peerTasks.binaryMessageListener = this.binaryMessageListener;
+        if (!this.connected) {
+            this.connected = true;
+
+            // Run asynchronously out of this function call.
+            setTimeout(async () => {
+                do {
+                    console.log('Attempting connect...');
+                    const server = new SignallingServer(
+                        this.serverUrl,
+                        this.serverAuth,
+                        this.peerConfig.peerAuth,
+                        this.peerConfig.pairingId
+                    );
+                    this.peerTasks = new PeerTasks(this.peerConfig.role, server, mediaStreams, this.listeners, this.reliableDataChannel);
+
+                    await this.peerTasks.connect();
+                    this.peerTasks.close();
+
+                    await waitMillis(1000);
+                } while (this.connected && this.autoReconnect);
+            }, 1);
+        }
     }
 
     async sendMessage(message: string|ArrayBuffer): Promise<void> {
@@ -38,108 +54,156 @@ export class ThingPeer {
     }
 
     disconnect() {
-        this.peerTasks?.disconnect();
-    }
-
-    on(type: 'connectionStateChanged', callback: (state: ConnectionState) => void): void;
-    on(type: 'mediaStream', callback: (mediaStream: MediaStreamTrack) => void): void;
-    on(type: 'stringMessage', callback: (message: string) => void): void;
-    on(type: 'binaryMessage', callback: (message: ArrayBuffer) => void): void;
-    on(type: string, callback: any): void {
-        switch (type) {
-            case 'connectionStateChanged':
-                this.connectionStateListener = callback;
-                if (this.peerTasks) {
-                    this.peerTasks.connectionStateListener = callback;
-                }
-                break;
-            case 'mediaStream':
-                this.mediaStreamListener = callback;
-                if (this.peerTasks) {
-                    this.peerTasks.mediaStreamListener = callback;
-                }
-                break;
-            case 'stringMessage':
-                this.stringMessageListener = callback;
-                if (this.peerTasks) {
-                    this.peerTasks.stringMessageListener = callback;
-                }
-                break;
-            case 'binaryMessage':
-                this.binaryMessageListener = callback;
-                if (this.peerTasks) {
-                    this.peerTasks.binaryMessageListener = callback;
-                }
-                break;
-            default:
-                throw new Error(`Unknown event type: ${type}`);
-        }
+        this.peerTasks?.close();
+        this.connected = false;
     }
 }
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 
-interface PeerTasks {
-    connectionStateListener?: (state: ConnectionState) => void;
-    mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
-    stringMessageListener?: (message: string) => void;
-    binaryMessageListener?: (message: ArrayBuffer) => void;
+/**
+ * A task to attempt to connect to a peer once, and wait until the connection fails for any reason.
+ */
+class PeerTasks {
+    private peerConnection: RTCPeerConnection;
+    private dataChannel?: RTCDataChannel;
+    private completionResolver = () => {};
 
-    onPeerConnect(): void;
-    onIceCandidate(candidate: RTCIceCandidate): void;
-    onOffer(offer: RTCSessionDescriptionInit): void;
-    onAnswer(answer: RTCSessionDescriptionInit): void;
-    onPeerDisconnect(): void;
-
-    sendMessage(message: string|ArrayBuffer): Promise<void>;
-    disconnect(): void;
-}
-
-abstract class BasePeerTasks implements PeerTasks {
-    protected peerConnection?: RTCPeerConnection;
-    protected dataChannel?: RTCDataChannel;
-    connectionStateListener?: (state: ConnectionState) => void;
-    mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
-    stringMessageListener?: (message: string) => void;
-    binaryMessageListener?: (message: ArrayBuffer) => void;
-
-    constructor(protected server: SignallingServer, private localMediaStreams: MediaStream[], protected reliableDataChannel: boolean) {
-        this.server.connect();
-        this.server.on('peerConnect', () => this.onPeerConnect());
-        this.server.on('iceCandidate', candidate => this.onIceCandidate(candidate));
-        this.server.on('offer', offer => this.onOffer(offer));
-        this.server.on('answer', answer => this.onAnswer(answer));
-        this.server.on('peerDisconnect', () => this.onPeerDisconnect());
-        this.server.on('error', () => {
-            // This indicates a disconnect from the server (not initiated by us).
-            // We should try from the start again if we haven't got a peer connection yet.
-        });
-    }
-
-    onPeerConnect(): void {
-        this.connectionStateListener?.('connecting');
-        if (this.peerConnection?.connectionState !== 'connected') {
-            // If we're not connected and the peer is trying to connect again,
-            // we probably failed the initial signalling.
-            this.peerConnection?.close();
-            this.peerConnection = undefined;
-        }
+    constructor(
+        private role: Role,
+        private server: SignallingServer,
+        private localMediaStreams: MediaStream[],
+        private listeners: Listeners,
+        private reliableDataChannel: boolean,
+    ) {
         this.peerConnection = this.createPeerConnection();
     }
 
-    onIceCandidate(candidate: RTCIceCandidate): void {
-        this.peerConnection?.addIceCandidate(candidate);
+    connect(): Promise<void> {
+        const {promise, resolve, reject} = Promise.withResolvers<void>();
+        this.completionResolver = resolve;
+
+        this.listeners.connectionStateListener?.('connecting');
+        this.setupListeners();
+        this.server.connect();
+
+        return promise;
     }
 
-    onOffer(offer: RTCSessionDescriptionInit): void {}
+    private setupListeners() {
+        this.setupCommon();
 
-    onAnswer(answer: RTCSessionDescriptionInit): void {}
+        switch (this.role) {
+            case 'initiator':
+                this.setupInitiator();
+                break;
+            case 'responder':
+                this.setupResponder();
+                break;
+        }
+    }
 
-    onPeerDisconnect(): void {
-        console.log('Peer disconnected.');
-        // Don't do anything, as there may be a race condition between us and
-        // the other peer reaching a "connected" RTC state, after which they
-        // disconnect.
+    private setupCommon() {
+        this.localMediaStreams.forEach(mediaStream =>
+            mediaStream.getTracks().forEach(track => {
+                console.log('Adding local track');
+                this.peerConnection.addTrack(track);
+            })
+        );
+
+        this.peerConnection.addEventListener('connectionstatechange', event => {
+            const state = this.peerConnection.connectionState;
+            console.log(`Connection state: ${state}`);
+
+            // Once we have reached peer connected state, we should disconnect from server.
+            if (state === 'connected') {
+                this.listeners.connectionStateListener?.('connected');
+                this.server.disconnect();
+            } else if (state === 'disconnected' || state === 'failed') {
+                // Disconnect from everything (server and RTC).
+                this.close();
+            }
+        });
+
+        this.peerConnection.addEventListener('track', event => {
+            console.log('Remote track event received');
+            this.listeners.mediaStreamListener?.(event.track);
+        });
+
+        this.peerConnection.addEventListener('icecandidate', event => {
+            if (event.candidate) {
+                console.log(`Got candidate: ${event.candidate}`);
+                this.server.sendIceCandidate(event.candidate);
+            }
+        });
+
+        this.server.on('iceCandidate', candidate => {
+            this.peerConnection.addIceCandidate(candidate);
+        });
+
+        this.server.on('peerDisconnect', () => {
+            // Don't do anything, as there may be a race condition between us and
+            // the other peer reaching a "connected" RTC state, after which they
+            // disconnect.
+            console.log('Peer disconnected.');
+        });
+
+        this.server.on('error', () => {
+            // This indicates a disconnect from the server (not initiated by us).
+            this.listeners.errorListener?.('Server error');
+            this.close();
+        });
+
+        this.server.on('close', () => {
+            // Only shut down this task if the server close was not intentional.
+            if (this.peerConnection.connectionState !== 'connected') {
+                this.close();
+            }
+        });
+    }
+
+    private setupInitiator() {
+        // For some reason, it appears that only the initiator can set this up.
+        // Not entirely sure why yet.
+        this.peerConnection.addTransceiver('video');
+
+        this.server.on('peerConnect', async () => {
+            const offer = await this.peerConnection.createOffer();
+            await this.peerConnection.setLocalDescription(offer);
+            this.server.sendOffer(offer);
+        });
+
+        this.server.on('answer', answer => {
+            this.peerConnection.setRemoteDescription(answer);
+        });
+
+        let channelConfig: RTCDataChannelInit;
+        if (this.reliableDataChannel) {
+            channelConfig = {ordered: true};
+        } else {
+            channelConfig = {ordered: false, maxRetransmits: 0};
+        }
+        this.dataChannel = this.peerConnection.createDataChannel('dataChannel', channelConfig);
+
+        this.dataChannel.addEventListener('message', event => {
+            this.onDataChannelMessage(event.data);
+        });
+    }
+
+    private setupResponder() {
+        this.server.on('offer', async offer => {
+            this.peerConnection.setRemoteDescription(offer);
+            const answer = await this.peerConnection.createAnswer();
+            this.peerConnection.setLocalDescription(answer);
+            this.server.sendAnswer(answer);
+        });
+
+        this.peerConnection.addEventListener('datachannel', event => {
+            this.dataChannel = event.channel;
+            this.dataChannel.addEventListener('message', event => {
+                this.onDataChannelMessage(event.data);
+            });
+        });
     }
 
     sendMessage(message: string | ArrayBuffer): Promise<void>;
@@ -151,13 +215,14 @@ abstract class BasePeerTasks implements PeerTasks {
         this.dataChannel?.send(message);
     }
 
-    disconnect(): void {
+    close(): void {
         this.server.disconnect();
+        this.peerConnection.close();
         this.dataChannel?.close();
-        this.peerConnection?.close();
         this.dataChannel = undefined;
-        this.peerConnection = undefined;
-        this.connectionStateListener?.('disconnected');
+        this.listeners.connectionStateListener?.('disconnected');
+        // Signal to those awaiting connect that we are closed.
+        this.completionResolver();
     }
 
     private createPeerConnection(): RTCPeerConnection {
@@ -172,111 +237,17 @@ abstract class BasePeerTasks implements PeerTasks {
             ]
         };
 
-        const peerConnection = new RTCPeerConnection(config);
-
-        peerConnection.addEventListener('connectionstatechange', event => {
-            const state = this.peerConnection?.connectionState;
-            console.log(`Connection state: ${state}`);
-            // Once we have reached peer connected state, we should disconnect from server.
-            if (state === 'connected') {
-                this.connectionStateListener?.('connected');
-                this.server.disconnect();
-            } else if (state === 'disconnected' || state === 'failed') {
-                // Disconnect from everything (server and RTC), reconnect to the signalling
-                // server, and start again.
-                this.disconnect();
-                this.server.connect();
-            }
-        });
-
-        this.localMediaStreams?.forEach(mediaStream =>
-            mediaStream?.getTracks()?.forEach(track => {
-                console.log('Adding local track');
-                peerConnection.addTrack(track);
-            })
-        );
-
-        peerConnection.addEventListener('track', event => {
-            console.log('Remote track event received');
-            this.mediaStreamListener?.(event.track);
-        });
-
-        this.setupDataChannel(peerConnection);
-
-        peerConnection.addEventListener('icecandidate', event => {
-            if (event.candidate) {
-                console.log(`Got candidate: ${event.candidate}`);
-                this.server.sendIceCandidate(event.candidate);
-            }
-        });
-
-        return peerConnection;
+        return new RTCPeerConnection(config);
     }
 
-    protected abstract setupDataChannel(peerConnection: RTCPeerConnection): void;
-
-    protected onDataChannelMessage(message: any) {
+    private onDataChannelMessage(message: any) {
         if (typeof message === 'string') {
-            this.stringMessageListener?.(message);
+            this.listeners.stringMessageListener?.(message);
         } else if (message instanceof ArrayBuffer) {
-            this.binaryMessageListener?.(message);
+            this.listeners.binaryMessageListener?.(message);
         } else {
             console.error('Unknown message type received.');
         }
-    }
-}
-
-class InitiatorPeerTasks extends BasePeerTasks {
-    onPeerConnect(): void {
-        super.onPeerConnect();
-        // For some reason, it appears that only the initiator can set this up.
-        // Not entirely sure why yet.
-        this.peerConnection?.addTransceiver('video');
-        this.peerConnection?.createOffer().then(offer => {
-            this.peerConnection?.setLocalDescription(offer);
-            this.server.sendOffer(offer);
-        });
-    }
-
-    onAnswer(answer: RTCSessionDescriptionInit): void {
-        this.peerConnection?.setRemoteDescription(answer);
-    }
-
-    protected setupDataChannel(peerConnection: RTCPeerConnection) {
-        let channelConfig: RTCDataChannelInit;
-        if (this.reliableDataChannel) {
-            channelConfig = {ordered: true};
-        } else {
-            channelConfig = {ordered: false, maxRetransmits: 0};
-        }
-        this.dataChannel = peerConnection.createDataChannel('dataChannel', channelConfig);
-
-        this.dataChannel.addEventListener('message', event => {
-            this.onDataChannelMessage(event.data);
-        });
-    }
-}
-
-class ResponderPeerTasks extends BasePeerTasks {
-    onPeerConnect(): void {
-        super.onPeerConnect();
-    }
-
-    onOffer(offer: RTCSessionDescriptionInit): void {
-        this.peerConnection?.setRemoteDescription(offer);
-        this.peerConnection?.createAnswer().then(answer => {
-            this.peerConnection?.setLocalDescription(answer);
-            this.server.sendAnswer(answer);
-        });
-    }
-
-    protected setupDataChannel(peerConnection: RTCPeerConnection) {
-        peerConnection.addEventListener('datachannel', event => {
-            this.dataChannel = event.channel;
-            this.dataChannel.addEventListener('message', event => {
-                this.onDataChannelMessage(event.data);
-            });
-        });
     }
 }
 
