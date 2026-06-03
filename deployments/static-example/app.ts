@@ -29,11 +29,6 @@ const stopSpeedTestButton = document.getElementById('stopSpeedTestButton') as HT
 const receivedBytesBox = document.getElementById('receivedBytes') as HTMLDivElement;
 const sentBytesBox = document.getElementById('sentBytes') as HTMLDivElement;
 
-const fileUpload = document.getElementById('fileUpload') as HTMLInputElement;
-const receiveFileButton = document.getElementById('receiveFileButton') as HTMLButtonElement;
-const finishReceiveFileButton = document.getElementById('finishReceiveFileButton') as HTMLButtonElement;
-const fileTransferStatusBox = document.getElementById('fileTransferStatus') as HTMLDivElement;
-
 const localVideo = document.getElementById('localVideo') as HTMLVideoElement;
 const remoteVideo = document.getElementById('remoteVideo') as HTMLVideoElement;
 
@@ -59,7 +54,6 @@ responderBox.style.display = 'none';
 qrCodeVideo.style.display = 'none';
 
 stopSpeedTestButton.disabled = true;
-finishReceiveFileButton.disabled = true;
 
 setup();
 
@@ -187,50 +181,6 @@ stopSpeedTestButton.addEventListener('click', () => {
     stopSpeedTestButton.disabled = true;
 });
 
-fileUpload.addEventListener('change', async () => {
-    const files = fileUpload.files;
-    console.log(files);
-    if (!files || files.length !== 1) {
-        alert('Unexpected number of files selected!');
-        return;
-    }
-
-    const fileReader = files[0].stream().getReader();
-    while (true) {
-        const chunk = await fileReader.read();
-        if (chunk.done) {
-            break;
-        }
-
-        const chunkLength = chunk.value.byteLength;
-        console.log(chunkLength);
-
-        const SUB_CHUNK_SIZE = 16384;
-        for (let i = 0; i < chunkLength; i += SUB_CHUNK_SIZE) {
-            const subChunk = chunk.value.buffer.slice(i, Math.min(i + SUB_CHUNK_SIZE, chunkLength));
-            console.log(`Sending subchunk of length ${subChunk.byteLength}`);
-            await peer?.sendMessage(subChunk);
-        }
-    }
-});
-
-receiveFileButton.addEventListener('click', async () => {
-    const handle = await window.showSaveFilePicker({suggestedName: 'download.dat'});
-    savingFile = (await handle.createWritable()).getWriter();
-
-    receivedFileBytes = 0;
-    receiveFileButton.disabled = true;
-    finishReceiveFileButton.disabled = false;
-});
-
-finishReceiveFileButton.addEventListener('click', async () => {
-    await savingFile?.close();
-    savingFile = null;
-    alert('File written');
-    receiveFileButton.disabled = false;
-    finishReceiveFileButton.disabled = true;
-});
-
 async function setup() {
     if (initiatorRadio.checked) {
         await setupInitiator();
@@ -317,11 +267,7 @@ function createPeer(peerConfig: PeerConfig): ThingPeer {
             console.log(`String message received: ${message}`);
         },
 
-        binaryMessageListener: async message => {
-            if (savingFile) {
-                await savingFile.write(message);
-            }
-
+        binaryMessageListener: message => {
             bytesReceived += message.byteLength;
             receivedFileBytes += message.byteLength;
 
@@ -332,8 +278,6 @@ function createPeer(peerConfig: PeerConfig): ThingPeer {
                 receivedBytesBox.innerText = `Received: ${formatBps(bytesPerSec)}`;
                 bytesReceived = 0;
                 measureStartTime = currentTime;
-
-                fileTransferStatusBox.innerText = `Received ${formatSIPrefix(receivedFileBytes)}B of file.`;
             }
         },
 
