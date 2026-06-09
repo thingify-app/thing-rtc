@@ -139,21 +139,24 @@ disconnectButton.addEventListener('click', () => {
 });
 
 sendMessageButton.addEventListener('click', () => {
-    peer?.sendMessage(messageText.value);
+    // peer?.sendMessage(messageText.value);
 });
 
-startSpeedTestButton.addEventListener('click', () => {
+startSpeedTestButton.addEventListener('click', async () => {
     speedTestActive = true;
     startSpeedTestButton.disabled = true;
     stopSpeedTestButton.disabled = false;
+
+    const dc = await peer?.createDataChannel('speedtest', true);
+    console.log('Data channel created.');
 
     const messageBuffer = new Uint8Array(16384);
     let bytesSent = 0;
     let measureStartTime = Date.now();
 
-    const sendFn = async () => {
+    while (speedTestActive) {
         crypto.getRandomValues(messageBuffer);
-        await peer?.sendMessage(messageBuffer.buffer);
+        await dc?.sendMessage(messageBuffer.buffer);
         bytesSent += messageBuffer.byteLength;
 
         const currentTime = Date.now();
@@ -164,15 +167,7 @@ startSpeedTestButton.addEventListener('click', () => {
             bytesSent = 0;
             measureStartTime = currentTime;
         }
-
-        if (speedTestActive) {
-            // Queue up another send, allowing the browser event loop to
-            // execute in between.
-            setTimeout(sendFn, 0);
-        }
     };
-
-    sendFn();
 });
 
 stopSpeedTestButton.addEventListener('click', () => {
@@ -263,22 +258,26 @@ function createPeer(peerConfig: PeerConfig): ThingPeer {
             }
         },
 
-        stringMessageListener: message => {
-            console.log(`String message received: ${message}`);
-        },
+        dataChannelListener: dc => {
+            console.log(`New data channel received: ${dc.getLabel()}`);
 
-        binaryMessageListener: message => {
-            bytesReceived += message.byteLength;
-            receivedFileBytes += message.byteLength;
+            dc.on('stringMessage', message => {
+                console.log(`String message received: ${message}`);
+            });
 
-            const currentTime = Date.now();
-            const elapsedTime = currentTime - measureStartTime;
-            if (elapsedTime >= 1000) {
-                const bytesPerSec = bytesReceived / (elapsedTime / 1000);
-                receivedBytesBox.innerText = `Received: ${formatBps(bytesPerSec)}`;
-                bytesReceived = 0;
-                measureStartTime = currentTime;
-            }
+            dc.on('binaryMessage', message => {
+                bytesReceived += message.byteLength;
+                receivedFileBytes += message.byteLength;
+
+                const currentTime = Date.now();
+                const elapsedTime = currentTime - measureStartTime;
+                if (elapsedTime >= 1000) {
+                    const bytesPerSec = bytesReceived / (elapsedTime / 1000);
+                    receivedBytesBox.innerText = `Received: ${formatBps(bytesPerSec)}`;
+                    bytesReceived = 0;
+                    measureStartTime = currentTime;
+                }
+            });
         },
 
         mediaStreamListener: track => {

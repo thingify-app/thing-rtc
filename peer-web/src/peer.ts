@@ -2,11 +2,12 @@ import { PeerConfig, Role } from "./peer-config/peer-config";
 import { ServerAuth } from "./server-auth";
 import { SignallingServer } from "./signalling-server";
 
+const DEFAULT_DATA_CHANNEL_NAME = 'default';
+
 export interface Listeners {
     connectionStateListener?: (state: ConnectionState) => void;
     mediaStreamListener?: (mediaStream: MediaStreamTrack) => void;
-    stringMessageListener?: (message: string) => void;
-    binaryMessageListener?: (message: ArrayBuffer) => void;
+    dataChannelListener?: (dataChannel: DataChannel) => void;
     errorListener?: (error: string) => void;
 }
 
@@ -20,7 +21,6 @@ export class ThingPeer {
         private serverAuth: ServerAuth,
         private peerConfig: PeerConfig,
         private listeners: Listeners,
-        private reliableDataChannel: boolean = false,
         private autoReconnect: boolean = true,
     ) {}
 
@@ -38,7 +38,7 @@ export class ThingPeer {
                         this.peerConfig.peerAuth,
                         this.peerConfig.pairingId
                     );
-                    this.peerTasks = new PeerTasks(this.peerConfig.role, server, mediaStreams, this.listeners, this.reliableDataChannel);
+                    this.peerTasks = new PeerTasks(this.peerConfig.role, server, mediaStreams, this.listeners);
 
                     await this.peerTasks.connect();
                     this.peerTasks.close();
@@ -49,8 +49,12 @@ export class ThingPeer {
         }
     }
 
-    async sendMessage(message: string|ArrayBuffer): Promise<void> {
-        await this.peerTasks?.sendMessage(message);
+    async createDataChannel(label: string, reliable: boolean): Promise<DataChannel> {
+        if (this.peerTasks) {
+            return await this.peerTasks?.createDataChannel(label, reliable);
+        } else {
+            throw new Error('Cannot create data channel - no active peer task');
+        }
     }
 
     disconnect() {
@@ -66,7 +70,7 @@ export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
  */
 class PeerTasks {
     private peerConnection: RTCPeerConnection;
-    private dataChannel?: RTCDataChannel;
+    private dataChannels: DataChannel[] = [];
     private completionResolver = () => {};
 
     constructor(
@@ -74,7 +78,6 @@ class PeerTasks {
         private server: SignallingServer,
         private localMediaStreams: MediaStream[],
         private listeners: Listeners,
-        private reliableDataChannel: boolean,
     ) {
         this.peerConnection = this.createPeerConnection();
     }
@@ -137,6 +140,15 @@ class PeerTasks {
             }
         });
 
+        this.peerConnection.addEventListener('datachannel', event => {
+            // Do not expose the default data channel to users.
+            if (event.channel.label !== DEFAULT_DATA_CHANNEL_NAME) {
+                const dataChannel = new DataChannel(event.channel);
+                this.dataChannels.push(dataChannel);
+                this.listeners.dataChannelListener?.(dataChannel);
+            }
+        });
+
         this.server.on('iceCandidate', candidate => {
             this.peerConnection.addIceCandidate(candidate);
         });
@@ -177,17 +189,9 @@ class PeerTasks {
             this.peerConnection.setRemoteDescription(answer);
         });
 
-        let channelConfig: RTCDataChannelInit;
-        if (this.reliableDataChannel) {
-            channelConfig = {ordered: true};
-        } else {
-            channelConfig = {ordered: false, maxRetransmits: 0};
-        }
-        this.dataChannel = this.peerConnection.createDataChannel('dataChannel', channelConfig);
-
-        this.dataChannel.addEventListener('message', event => {
-            this.onDataChannelMessage(event.data);
-        });
+        // Create a default data channel - it appears that if we have this, we
+        // can dynamically create new data channels later without renegotiating.
+        this.peerConnection.createDataChannel(DEFAULT_DATA_CHANNEL_NAME);
     }
 
     private setupResponder() {
@@ -197,29 +201,33 @@ class PeerTasks {
             this.peerConnection.setLocalDescription(answer);
             this.server.sendAnswer(answer);
         });
-
-        this.peerConnection.addEventListener('datachannel', event => {
-            this.dataChannel = event.channel;
-            this.dataChannel.addEventListener('message', event => {
-                this.onDataChannelMessage(event.data);
-            });
-        });
     }
 
-    sendMessage(message: string | ArrayBuffer): Promise<void>;
-    async sendMessage(message: any): Promise<void> {
-        // Block the promise until the message can be buffered.
-        while ((this.dataChannel?.bufferedAmount || 0) > 500_000) {
-            await waitMillis(1);
+    async createDataChannel(label: string, reliable: boolean): Promise<DataChannel> {
+        let channelConfig: RTCDataChannelInit;
+        if (reliable) {
+            channelConfig = {ordered: true};
+        } else {
+            channelConfig = {ordered: false, maxRetransmits: 0};
         }
-        this.dataChannel?.send(message);
+
+        const dataChannel = this.peerConnection.createDataChannel(label, channelConfig);
+        const wrapped = new DataChannel(dataChannel);
+        const {promise, resolve} = Promise.withResolvers<DataChannel>();
+
+        // TODO: reject the promise if the channel doesn't open within some timeout.
+        dataChannel.addEventListener('open', () => {
+            resolve(wrapped);
+        });
+
+        return promise;
     }
 
     close(): void {
         this.server.disconnect();
         this.peerConnection.close();
-        this.dataChannel?.close();
-        this.dataChannel = undefined;
+        this.dataChannels.forEach(dc => dc.close());
+        this.dataChannels = [];
         this.listeners.connectionStateListener?.('disconnected');
         // Signal to those awaiting connect that we are closed.
         this.completionResolver();
@@ -239,15 +247,52 @@ class PeerTasks {
 
         return new RTCPeerConnection(config);
     }
+}
 
-    private onDataChannelMessage(message: any) {
-        if (typeof message === 'string') {
-            this.listeners.stringMessageListener?.(message);
-        } else if (message instanceof ArrayBuffer) {
-            this.listeners.binaryMessageListener?.(message);
-        } else {
-            console.error('Unknown message type received.');
+export class DataChannel {
+    private stringMessageListener?: (message: string) => void;
+    private binaryMessageListener?: (message: ArrayBuffer) => void;
+
+    constructor(private rtcDataChannel: RTCDataChannel) {
+        rtcDataChannel.addEventListener('message', event => {
+            const message = event.data;
+            if (typeof message === 'string') {
+                this.stringMessageListener?.(message);
+            } else if (message instanceof ArrayBuffer) {
+                this.binaryMessageListener?.(message);
+            } else {
+                console.error('Unknown message type received.');
+            }
+        });
+    }
+
+    async sendMessage(message: string|ArrayBuffer): Promise<void> {
+        // Block the promise until the message can be buffered.
+        while ((this.rtcDataChannel.bufferedAmount || 0) > 500_000) {
+            await waitMillis(1);
         }
+        this.rtcDataChannel.send(message as any);
+    }
+
+    getLabel(): string {
+        return this.rtcDataChannel.label;
+    }
+
+    on(messageType: 'binaryMessage', listener: (message: ArrayBuffer) => void): void;
+    on(messageType: 'stringMessage', listener: (message: string) => void): void;
+    on(messageType: 'stringMessage'|'binaryMessage', listener: (message: any) => void): void {
+        switch(messageType) {
+            case 'stringMessage':
+                this.stringMessageListener = listener;
+                break;
+            case 'binaryMessage':
+                this.binaryMessageListener = listener;
+                break;
+        }
+    }
+
+    close() {
+        this.rtcDataChannel.close();
     }
 }
 
