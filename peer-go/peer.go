@@ -12,15 +12,24 @@ import (
 // Peer represents a connection (attempted or actual) to a ThingRTC peer.
 type Peer interface {
 	Connect()
+	CreateDataChannel(label string, reliable bool) (DataChannel, error)
 	Disconnect()
 
 	OnConnectionStateChange(f func(connectionState int))
-	OnStringMessage(f func(message string))
-	OnBinaryMessage(f func(message []byte))
+	OnDataChannel(f func(dataChannel DataChannel))
 	OnError(f func(err error))
+}
 
+type DataChannel interface {
 	SendStringMessage(message string)
 	SendBinaryMessage(message []byte)
+
+	OnStringMessage(listener func(message string))
+	OnBinaryMessage(listener func(message []byte))
+
+	GetLabel() string
+
+	Close()
 }
 
 func NewPeer(serverUrl string, serverAuth ServerAuth, peerConfig *peerconfig.PeerConfig) Peer {
@@ -39,8 +48,7 @@ func NewPeerWithMedia(serverUrl string, serverAuth ServerAuth, peerConfig *peerc
 
 		// Initialise listeners as empty functions to allow them to be optional.
 		connectionStateListener: func(connectionState int) {},
-		stringMessageListener:   func(message string) {},
-		binaryMessageListener:   func(message []byte) {},
+		dataChannelListener:     func(dataChannel DataChannel) {},
 		errorListener:           func(err error) {},
 	}
 }
@@ -70,8 +78,7 @@ type peerImpl struct {
 	connected bool
 
 	connectionStateListener func(connectionState int)
-	stringMessageListener   func(message string)
-	binaryMessageListener   func(message []byte)
+	dataChannelListener     func(dataChannel DataChannel)
 	errorListener           func(err error)
 }
 
@@ -98,8 +105,7 @@ func (p *peerImpl) Connect() {
 					tracks:    p.tracks,
 					// Wrap listeners so they can be dynamically updated, and run them in goroutines in case they block.
 					connectionStateListener: func(connectionState int) { go p.connectionStateListener(connectionState) },
-					stringMessageListener:   func(message string) { go p.stringMessageListener(message) },
-					binaryMessageListener:   func(message []byte) { go p.binaryMessageListener(message) },
+					dataChannelListener:     func(dataChannel DataChannel) { go p.dataChannelListener(dataChannel) },
 					errorListener:           func(err error) { go p.errorListener(err) },
 				}
 				err := p.peerTask.AttemptConnect(p.serverAuth, p.peerConfig)
@@ -112,28 +118,20 @@ func (p *peerImpl) Connect() {
 	}
 }
 
+func (p *peerImpl) CreateDataChannel(label string, reliable bool) (DataChannel, error) {
+	return p.peerTask.CreateDataChannel(label, reliable)
+}
+
 func (p *peerImpl) OnConnectionStateChange(f func(connectionState int)) {
 	p.connectionStateListener = f
 }
 
-func (p *peerImpl) OnStringMessage(f func(message string)) {
-	p.stringMessageListener = f
-}
-
-func (p *peerImpl) OnBinaryMessage(f func(message []byte)) {
-	p.binaryMessageListener = f
+func (p *peerImpl) OnDataChannel(f func(dataChannel DataChannel)) {
+	p.dataChannelListener = f
 }
 
 func (p *peerImpl) OnError(f func(err error)) {
 	p.errorListener = f
-}
-
-func (p *peerImpl) SendStringMessage(message string) {
-	p.peerTask.SendStringMessage(message)
-}
-
-func (p *peerImpl) SendBinaryMessage(message []byte) {
-	p.peerTask.SendBinaryMessage(message)
 }
 
 func (p *peerImpl) Disconnect() {

@@ -11,6 +11,8 @@ import (
 	peerconfig "github.com/thingify-app/thing-rtc/peer-go/peer-config"
 )
 
+const DEFAULT_DATA_CHANNEL_NAME = "default"
+
 type peerTask struct {
 	serverUrl string
 	codecs    []*codec.Codec
@@ -18,11 +20,10 @@ type peerTask struct {
 
 	server         *SignallingServer
 	peerConnection *webrtc.PeerConnection
-	dataChannel    *webrtc.DataChannel
+	dataChannels   []DataChannel
 
 	connectionStateListener func(connectionState int)
-	stringMessageListener   func(message string)
-	binaryMessageListener   func(message []byte)
+	dataChannelListener     func(dataChannel DataChannel)
 	errorListener           func(err error)
 }
 
@@ -88,16 +89,28 @@ func (p *peerTask) AttemptConnect(serverAuth ServerAuth, peerConfig *peerconfig.
 	return nil
 }
 
-func (p *peerTask) SendStringMessage(message string) {
-	if p.dataChannel != nil {
-		p.dataChannel.SendText(message)
+func (p *peerTask) CreateDataChannel(label string, reliable bool) (DataChannel, error) {
+	channelConfig := webrtc.DataChannelInit{}
+	if reliable {
+		ordered := true
+		channelConfig.Ordered = &ordered
+	} else {
+		ordered := false
+		maxRetransmits := uint16(0)
+		channelConfig.Ordered = &ordered
+		channelConfig.MaxRetransmits = &maxRetransmits
 	}
-}
 
-func (p *peerTask) SendBinaryMessage(message []byte) {
-	if p.dataChannel != nil {
-		p.dataChannel.Send(message)
+	dataChannel, err := p.peerConnection.CreateDataChannel(label, &channelConfig)
+	if err != nil {
+		return nil, err
 	}
+
+	wrapped := createDataChannelWrapper(dataChannel)
+	p.dataChannels = append(p.dataChannels, wrapped)
+	p.dataChannelListener(wrapped)
+
+	return wrapped, nil
 }
 
 func (p *peerTask) Disconnect() {
@@ -110,7 +123,7 @@ func (p *peerTask) Disconnect() {
 	}
 	p.server = nil
 	p.peerConnection = nil
-	p.dataChannel = nil
+	p.dataChannels = nil
 }
 
 func createPeerConnection(codecs []*codec.Codec) (*webrtc.PeerConnection, error) {
@@ -158,7 +171,7 @@ func (p *peerTask) setupListeners(role string) error {
 
 	switch role {
 	case "initiator":
-		p.setupInitiator()
+		return p.setupInitiator()
 	case "responder":
 		p.setupResponder()
 	default:
@@ -175,6 +188,15 @@ func (p *peerTask) setupCommon() error {
 		}
 	})
 
+	p.peerConnection.OnDataChannel(func(dc *webrtc.DataChannel) {
+		// Do not expose the default data channel to users.
+		if dc.Label() != DEFAULT_DATA_CHANNEL_NAME {
+			wrapped := createDataChannelWrapper(dc)
+			p.dataChannels = append(p.dataChannels, wrapped)
+			p.dataChannelListener(wrapped)
+		}
+	})
+
 	p.server.OnIceCandidate(func(candidate webrtc.ICECandidateInit) {
 		err := p.peerConnection.AddICECandidate(candidate)
 		if err != nil {
@@ -183,23 +205,6 @@ func (p *peerTask) setupCommon() error {
 	})
 
 	p.server.OnPeerDisconnect(func() {})
-
-	ordered := false
-	maxRetransmits := uint16(0)
-	negotiated := false
-	id := uint16(0)
-	options := &webrtc.DataChannelInit{
-		Ordered:        &ordered,
-		MaxRetransmits: &maxRetransmits,
-		Negotiated:     &negotiated,
-		ID:             &id,
-	}
-	dataChannel, err := p.peerConnection.CreateDataChannel("dataChannel", options)
-	if err != nil {
-		return err
-	}
-	p.dataChannel = dataChannel
-	dataChannel.OnMessage(p.handleDataChannelMessage)
 
 	for _, track := range p.tracks {
 		_, err := p.peerConnection.AddTrack(track)
@@ -210,7 +215,7 @@ func (p *peerTask) setupCommon() error {
 	return nil
 }
 
-func (p *peerTask) setupInitiator() {
+func (p *peerTask) setupInitiator() error {
 	p.server.OnPeerConnect(func() {
 		if len(p.tracks) > 0 {
 			p.peerConnection.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo)
@@ -235,6 +240,13 @@ func (p *peerTask) setupInitiator() {
 			p.errorListener(err)
 		}
 	})
+
+	_, err := p.peerConnection.CreateDataChannel(DEFAULT_DATA_CHANNEL_NAME, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (p *peerTask) setupResponder() {
@@ -259,10 +271,50 @@ func (p *peerTask) setupResponder() {
 	})
 }
 
-func (p *peerTask) handleDataChannelMessage(msg webrtc.DataChannelMessage) {
-	if msg.IsString {
-		p.stringMessageListener(string(msg.Data))
-	} else {
-		p.binaryMessageListener(msg.Data)
+type dataChannelWrapper struct {
+	wrapped               *webrtc.DataChannel
+	stringMessageListener func(message string)
+	binaryMessageListener func(message []byte)
+}
+
+func createDataChannelWrapper(wrapped *webrtc.DataChannel) DataChannel {
+	wrapper := &dataChannelWrapper{
+		wrapped:               wrapped,
+		stringMessageListener: func(message string) {},
+		binaryMessageListener: func(message []byte) {},
 	}
+
+	wrapped.OnMessage(func(msg webrtc.DataChannelMessage) {
+		if msg.IsString {
+			wrapper.stringMessageListener(string(msg.Data))
+		} else {
+			wrapper.binaryMessageListener(msg.Data)
+		}
+	})
+
+	return wrapper
+}
+
+func (dc *dataChannelWrapper) SendStringMessage(message string) {
+	dc.wrapped.SendText(message)
+}
+
+func (dc *dataChannelWrapper) SendBinaryMessage(message []byte) {
+	dc.wrapped.Send(message)
+}
+
+func (dc *dataChannelWrapper) OnStringMessage(listener func(message string)) {
+	dc.stringMessageListener = listener
+}
+
+func (dc *dataChannelWrapper) OnBinaryMessage(listener func(message []byte)) {
+	dc.binaryMessageListener = listener
+}
+
+func (dc *dataChannelWrapper) GetLabel() string {
+	return dc.wrapped.Label()
+}
+
+func (dc *dataChannelWrapper) Close() {
+	dc.wrapped.Close()
 }

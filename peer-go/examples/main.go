@@ -91,16 +91,25 @@ func connect(sharedSecretBase64 string, role string) error {
 			fmt.Println("Connecting...")
 		case thingrtc.Connected:
 			fmt.Println("Connected.")
-			for range time.Tick(time.Second) {
-				peer.SendStringMessage("Tick")
+			dataChannel, err := peer.CreateDataChannel("tick", true)
+			if err != nil {
+				fmt.Printf("Failed to create data channel: %v\n", err)
+			} else {
+				for range time.Tick(time.Second) {
+					dataChannel.SendStringMessage("Tick")
+				}
 			}
 		}
 	})
-	peer.OnStringMessage(func(message string) {
-		fmt.Printf("String message received: %v\n", message)
-	})
-	peer.OnBinaryMessage(func(message []byte) {
-		fmt.Printf("Binary message received: %v\n", message)
+	peer.OnDataChannel(func(dataChannel thingrtc.DataChannel) {
+		fmt.Printf("New data channel received: %v\n", dataChannel.GetLabel())
+
+		dataChannel.OnStringMessage(func(message string) {
+			fmt.Printf("String message received: %v\n", message)
+		})
+		dataChannel.OnBinaryMessage(func(message []byte) {
+			fmt.Printf("Binary message received: %v\n", message)
+		})
 	})
 	peer.OnError(func(err error) {
 		fmt.Printf("Peer error: %v\n", err)
