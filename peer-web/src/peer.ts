@@ -57,6 +57,14 @@ export class ThingPeer {
         }
     }
 
+    getDataChannel(label: string): DataChannel|null {
+        return this.peerTasks?.getDataChannel(label) ?? null;
+    }
+
+    getDataChannels(): DataChannel[] {
+        return this.peerTasks?.getDataChannels() ?? [];
+    }
+
     disconnect() {
         this.peerTasks?.close();
         this.connected = false;
@@ -217,10 +225,20 @@ class PeerTasks {
 
         // TODO: reject the promise if the channel doesn't open within some timeout.
         dataChannel.addEventListener('open', () => {
+            this.dataChannels.push(wrapped);
+            this.listeners.dataChannelListener?.(wrapped);
             resolve(wrapped);
         });
 
         return promise;
+    }
+
+    getDataChannel(label: string): DataChannel|null {
+        return this.dataChannels.find(dc => dc.getLabel() === label) ?? null;
+    }
+
+    getDataChannels(): DataChannel[] {
+        return this.dataChannels;
     }
 
     close(): void {

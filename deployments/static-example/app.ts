@@ -21,6 +21,10 @@ const sendVideoCheckbox = document.getElementById('sendVideo') as HTMLInputEleme
 const connectButton = document.getElementById('connectButton') as HTMLButtonElement;
 const disconnectButton = document.getElementById('disconnectButton') as HTMLButtonElement;
 
+const dataChannelList = document.getElementById('dataChannelList') as HTMLDivElement;
+const dataChannelLabel = document.getElementById('dataChannelLabel') as HTMLInputElement;
+const createDataChannelButton = document.getElementById('createDataChannelButton') as HTMLButtonElement;
+
 const messageText = document.getElementById('message') as HTMLInputElement;
 const sendMessageButton = document.getElementById('sendMessageButton') as HTMLButtonElement;
 
@@ -45,7 +49,6 @@ let peer: ThingPeer|null = null;
 let qrScannerControl: IScannerControls|null = null;
 
 let speedTestActive = false;
-let savingFile: WritableStreamDefaultWriter|null = null;
 let receivedFileBytes = 0;
 
 disconnectButton.disabled = true;
@@ -138,8 +141,22 @@ disconnectButton.addEventListener('click', () => {
     peer = null;
 });
 
-sendMessageButton.addEventListener('click', () => {
-    // peer?.sendMessage(messageText.value);
+createDataChannelButton.addEventListener('click', async () => {
+    const label = dataChannelLabel.value;
+    if (label.length > 0) {
+        await peer?.createDataChannel(label, true);
+        dataChannelLabel.value = '';
+        reloadDataChannels();
+    }
+});
+
+sendMessageButton.addEventListener('click', async () => {
+    const selectedDataChannel = document.querySelector('input[name="dataChannels"]:checked') as HTMLInputElement;
+    if (selectedDataChannel) {
+        const dc = peer?.getDataChannel(selectedDataChannel.value);
+        await dc?.sendMessage(messageText.value);
+        console.log(`Sent message on channel ${dc?.getLabel()}`);
+    }
 });
 
 startSpeedTestButton.addEventListener('click', async () => {
@@ -243,6 +260,27 @@ async function getCamera(): Promise<MediaStream> {
     return await navigator.mediaDevices?.getUserMedia({video: true});
 }
 
+function reloadDataChannels() {
+    dataChannelList.innerHTML = '';
+
+    const dcs = peer?.getDataChannels();
+    if (dcs) {
+        for (const dc of dcs) {
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'dataChannels';
+            radio.id = dc.getLabel();
+            radio.value = dc.getLabel();
+            dataChannelList.appendChild(radio);
+
+            const label = document.createElement('label');
+            label.setAttribute('for', dc.getLabel());
+            label.textContent = dc.getLabel();
+            dataChannelList.appendChild(label);
+        }
+    }
+}
+
 function createPeer(peerConfig: PeerConfig): ThingPeer {
     const serverAuth = new InsecureServerAuth(peerConfig.pairingId, peerConfig.role);
 
@@ -253,6 +291,7 @@ function createPeer(peerConfig: PeerConfig): ThingPeer {
     const listeners: Listeners = {
         connectionStateListener: state => {
             console.log(`Peer connection state: ${state}`);
+            reloadDataChannels();
             if (state === 'disconnected') {
                 remoteMediaStream.getTracks().forEach(track => remoteMediaStream.removeTrack(track));
             }
@@ -262,7 +301,7 @@ function createPeer(peerConfig: PeerConfig): ThingPeer {
             console.log(`New data channel received: ${dc.getLabel()}`);
 
             dc.on('stringMessage', message => {
-                console.log(`String message received: ${message}`);
+                console.log(`String message received from "${dc.getLabel()}": ${message}`);
             });
 
             dc.on('binaryMessage', message => {
@@ -278,6 +317,8 @@ function createPeer(peerConfig: PeerConfig): ThingPeer {
                     measureStartTime = currentTime;
                 }
             });
+
+            reloadDataChannels();
         },
 
         mediaStreamListener: track => {
