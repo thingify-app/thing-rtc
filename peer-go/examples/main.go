@@ -81,7 +81,7 @@ func connect(sharedSecretBase64 string, role string) error {
 	}
 
 	serverAuth := thingrtc.CreateInsecureServerAuth(peerConfig.PairingId, peerConfig.Role)
-	peer := thingrtc.NewPeerWithMedia(SIGNALLING_SERVER_URL, serverAuth, peerConfig, createVideoSource())
+	peer := thingrtc.NewPeerWithMedia(SIGNALLING_SERVER_URL, serverAuth, peerConfig, false, createVideoSource())
 
 	peer.OnConnectionStateChange(func(connectionState int) {
 		switch connectionState {

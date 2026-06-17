@@ -29,13 +29,13 @@ type peerTask struct {
 
 // Attempts to connect to a peer once, and blocks until the connection fails for any reason.
 // Must not be called again on the same instance.
-func (p *peerTask) AttemptConnect(serverAuth ServerAuth, peerConfig *peerconfig.PeerConfig) error {
+func (p *peerTask) AttemptConnect(serverAuth ServerAuth, peerConfig *peerconfig.PeerConfig, detachDataChannels bool) error {
 	serverFailed := make(chan interface{})
 	peerConnectionFailed := make(chan interface{})
 	peerConnectionSuccess := make(chan interface{})
 
 	server := NewSignallingServer(p.serverUrl, serverAuth, peerConfig.PeerAuth)
-	peerConnection, err := createPeerConnection(p.codecs)
+	peerConnection, err := createPeerConnection(p.codecs, detachDataChannels)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (p *peerTask) Disconnect() {
 	p.dataChannels = nil
 }
 
-func createPeerConnection(codecs []*codec.Codec) (*webrtc.PeerConnection, error) {
+func createPeerConnection(codecs []*codec.Codec, detachDataChannels bool) (*webrtc.PeerConnection, error) {
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
@@ -140,6 +140,11 @@ func createPeerConnection(codecs []*codec.Codec) (*webrtc.PeerConnection, error)
 
 	settingEngine := webrtc.SettingEngine{}
 	settingEngine.SetICETimeouts(5*time.Second, 5*time.Second, 2*time.Second)
+
+	if detachDataChannels {
+		// Required to allow us to "detach" a ReadWriteCloser from data channels.
+		settingEngine.DetachDataChannels()
+	}
 
 	mediaEngine := webrtc.MediaEngine{}
 
@@ -269,52 +274,4 @@ func (p *peerTask) setupResponder() {
 		}
 		p.server.SendAnswer(answer)
 	})
-}
-
-type dataChannelWrapper struct {
-	wrapped               *webrtc.DataChannel
-	stringMessageListener func(message string)
-	binaryMessageListener func(message []byte)
-}
-
-func createDataChannelWrapper(wrapped *webrtc.DataChannel) DataChannel {
-	wrapper := &dataChannelWrapper{
-		wrapped:               wrapped,
-		stringMessageListener: func(message string) {},
-		binaryMessageListener: func(message []byte) {},
-	}
-
-	wrapped.OnMessage(func(msg webrtc.DataChannelMessage) {
-		if msg.IsString {
-			wrapper.stringMessageListener(string(msg.Data))
-		} else {
-			wrapper.binaryMessageListener(msg.Data)
-		}
-	})
-
-	return wrapper
-}
-
-func (dc *dataChannelWrapper) SendStringMessage(message string) {
-	dc.wrapped.SendText(message)
-}
-
-func (dc *dataChannelWrapper) SendBinaryMessage(message []byte) {
-	dc.wrapped.Send(message)
-}
-
-func (dc *dataChannelWrapper) OnStringMessage(listener func(message string)) {
-	dc.stringMessageListener = listener
-}
-
-func (dc *dataChannelWrapper) OnBinaryMessage(listener func(message []byte)) {
-	dc.binaryMessageListener = listener
-}
-
-func (dc *dataChannelWrapper) GetLabel() string {
-	return dc.wrapped.Label()
-}
-
-func (dc *dataChannelWrapper) Close() {
-	dc.wrapped.Close()
 }

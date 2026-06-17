@@ -20,31 +20,20 @@ type Peer interface {
 	OnError(f func(err error))
 }
 
-type DataChannel interface {
-	SendStringMessage(message string)
-	SendBinaryMessage(message []byte)
-
-	OnStringMessage(listener func(message string))
-	OnBinaryMessage(listener func(message []byte))
-
-	GetLabel() string
-
-	Close()
+func NewPeer(serverUrl string, serverAuth ServerAuth, peerConfig *peerconfig.PeerConfig, detachDataChannels bool) Peer {
+	return NewPeerWithMedia(serverUrl, serverAuth, peerConfig, detachDataChannels)
 }
 
-func NewPeer(serverUrl string, serverAuth ServerAuth, peerConfig *peerconfig.PeerConfig) Peer {
-	return NewPeerWithMedia(serverUrl, serverAuth, peerConfig)
-}
-
-func NewPeerWithMedia(serverUrl string, serverAuth ServerAuth, peerConfig *peerconfig.PeerConfig, sources ...*MediaSource) Peer {
+func NewPeerWithMedia(serverUrl string, serverAuth ServerAuth, peerConfig *peerconfig.PeerConfig, detachDataChannels bool, sources ...*MediaSource) Peer {
 	// Only map sources to tracks once at initialisation - otherwise we break Pion driver state.
 	codecs, tracks := sourcesToCodecsTracks(sources)
 	return &peerImpl{
-		serverUrl:  serverUrl,
-		serverAuth: serverAuth,
-		peerConfig: peerConfig,
-		codecs:     codecs,
-		tracks:     tracks,
+		serverUrl:          serverUrl,
+		serverAuth:         serverAuth,
+		peerConfig:         peerConfig,
+		detachDataChannels: detachDataChannels,
+		codecs:             codecs,
+		tracks:             tracks,
 
 		// Initialise listeners as empty functions to allow them to be optional.
 		connectionStateListener: func(connectionState int) {},
@@ -68,11 +57,12 @@ func sourcesToCodecsTracks(sources []*MediaSource) ([]*codec.Codec, []webrtc.Tra
 }
 
 type peerImpl struct {
-	serverUrl  string
-	serverAuth ServerAuth
-	peerConfig *peerconfig.PeerConfig
-	codecs     []*codec.Codec
-	tracks     []webrtc.TrackLocal
+	serverUrl          string
+	serverAuth         ServerAuth
+	peerConfig         *peerconfig.PeerConfig
+	detachDataChannels bool
+	codecs             []*codec.Codec
+	tracks             []webrtc.TrackLocal
 
 	peerTask  *peerTask
 	connected bool
@@ -108,7 +98,7 @@ func (p *peerImpl) Connect() {
 					dataChannelListener:     func(dataChannel DataChannel) { go p.dataChannelListener(dataChannel) },
 					errorListener:           func(err error) { go p.errorListener(err) },
 				}
-				err := p.peerTask.AttemptConnect(p.serverAuth, p.peerConfig)
+				err := p.peerTask.AttemptConnect(p.serverAuth, p.peerConfig, p.detachDataChannels)
 				if err != nil {
 					p.errorListener(err)
 				}

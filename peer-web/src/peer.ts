@@ -270,6 +270,7 @@ class PeerTasks {
 export class DataChannel {
     private stringMessageListener?: (message: string) => void;
     private binaryMessageListener?: (message: ArrayBuffer) => void;
+    private closeListener?: () => void;
 
     constructor(private rtcDataChannel: RTCDataChannel) {
         rtcDataChannel.addEventListener('message', event => {
@@ -281,6 +282,10 @@ export class DataChannel {
             } else {
                 console.error('Unknown message type received.');
             }
+        });
+
+        rtcDataChannel.addEventListener('close', () => {
+            this.closeListener?.();
         });
     }
 
@@ -296,15 +301,19 @@ export class DataChannel {
         return this.rtcDataChannel.label;
     }
 
-    on(messageType: 'binaryMessage', listener: (message: ArrayBuffer) => void): void;
-    on(messageType: 'stringMessage', listener: (message: string) => void): void;
-    on(messageType: 'stringMessage'|'binaryMessage', listener: (message: any) => void): void {
-        switch(messageType) {
+    on(listenerType: 'binaryMessage', listener: (message: ArrayBuffer) => void): void;
+    on(listenerType: 'stringMessage', listener: (message: string) => void): void;
+    on(listenerType: 'close', listener: () => void): void;
+    on(listenerType: 'stringMessage'|'binaryMessage'|'close', listener: (message?: any) => void): void {
+        switch(listenerType) {
             case 'stringMessage':
                 this.stringMessageListener = listener;
                 break;
             case 'binaryMessage':
                 this.binaryMessageListener = listener;
+                break;
+            case "close":
+                this.closeListener = listener;
                 break;
         }
     }
