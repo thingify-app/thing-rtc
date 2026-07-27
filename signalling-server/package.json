@@ -15,7 +15,6 @@
     "@types/chai": "^4.2.14",
     "@types/chai-as-promised": "^7.1.4",
     "@types/mocha": "^8.0.4",
-    "@types/node": "^15.12.4",
     "@types/sinon": "^9.0.10",
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",

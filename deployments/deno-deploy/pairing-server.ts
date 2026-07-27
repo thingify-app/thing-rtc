@@ -1,5 +1,4 @@
-// @deno-types="./dist/pairing-server/index.d.ts"
-import { PairingServer as Server, Socket } from './dist/pairing-server/index.js';
+import { PairingServer as Server, Socket } from 'thingrtc-pairing-server';
 import { BroadcastChannelConnectionChannelFactory } from './connection-channel.ts';
 
 export class PairingServer {

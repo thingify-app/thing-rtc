@@ -1,0 +1,12 @@
+{
+    "nodeModulesDir": "manual",
+    "deploy": {
+        "org": "bradnicolle",
+        "exclude": [
+            "!node_modules/"
+        ],
+        "app": "thingify"
+    }
+}
+
+

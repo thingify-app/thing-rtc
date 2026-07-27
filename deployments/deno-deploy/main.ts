@@ -1,8 +1,7 @@
-import { serve } from "https://deno.land/std@0.140.0/http/server.ts";
 import { PairingServer } from "./pairing-server.ts";
 import { SignallingServer } from "./signalling-server.ts";
 
-serve(async req => {
+Deno.serve(async req => {
   const url = new URL(req.url);
   const path = url.pathname.split('/')[1];
   console.log(`Request for URL: ${url}`);

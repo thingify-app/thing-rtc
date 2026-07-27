@@ -1,5 +1,4 @@
-// @deno-types="./dist/signalling-server/index.d.ts"
-import { ConnectionChannel, ConnectionChannelFactory } from "./dist/signalling-server/index.js";
+import { ConnectionChannel, ConnectionChannelFactory } from 'thingrtc-signalling-server';
   
 export class BroadcastChannelConnectionChannelFactory implements ConnectionChannelFactory {  
   async getConnectionChannel(channelId: string): Promise<ConnectionChannel> {

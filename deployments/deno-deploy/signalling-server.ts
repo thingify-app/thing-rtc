@@ -1,5 +1,4 @@
-// @deno-types="./dist/signalling-server/index.d.ts"
-import { Server, Connection, ParseThroughAuthValidator, MessageParser } from './dist/signalling-server/index.js';
+import { Server, Connection, ParseThroughAuthValidator, MessageParser } from 'thingrtc-signalling-server';
 import { BroadcastChannelConnectionChannelFactory } from './connection-channel.ts';
 
 export class SignallingServer {

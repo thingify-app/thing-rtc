@@ -10,9 +10,14 @@ Advantages of Deno Deploy include:
   API to send messages between peers.
 
 ## Initial setup
-- Install Deno and the `deployctl` CLI tool.
-- Run `./setup.sh` to build and import the required local dependencies.
-- Generate a keypair and store the public JWK as `publicKey.json`.
+- Install the Deno CLI tool.
+- Install dependencies:
+  ```
+  npm ci
+  ```
 
 ## Run locally
 - Run `./run.sh` to run locally with the required flags.
+
+## Deployment
+- Run `deno deploy --prod`.
