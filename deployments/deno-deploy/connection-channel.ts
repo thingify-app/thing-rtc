@@ -1,8 +1,23 @@
-import { ConnectionChannel, ConnectionChannelFactory } from 'thingrtc-signalling-server';
-  
+/**
+ * Returns the ConnectionChannel instance for a given ID.
+ * A channel with a given ID will share the same group of listeners.
+ */
+export interface ConnectionChannelFactory {
+  getConnectionChannel(channelId: string): Promise<ConnectionChannel>;
+}
+
+/**
+ * A broadcast channel which simply relays any messages to all listeners.
+ */
+export interface ConnectionChannel {
+  sendMessage(message: string): Promise<void>;
+  onMessage(listener: (message: string) => void): void;
+  close(): void;
+}
+
 export class BroadcastChannelConnectionChannelFactory implements ConnectionChannelFactory {  
   async getConnectionChannel(channelId: string): Promise<ConnectionChannel> {
-    return new BroadcastChannelConnectionChannel(new BroadcastChannel(channelId));
+    return await new BroadcastChannelConnectionChannel(new BroadcastChannel(channelId));
   }
 }
   
@@ -16,7 +31,7 @@ export class BroadcastChannelConnectionChannel implements ConnectionChannel {
   }
 
   async sendMessage(message: string): Promise<void> {
-    this.channel.postMessage(message);
+    await this.channel.postMessage(message);
   }
 
   close() {

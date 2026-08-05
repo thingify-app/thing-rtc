@@ -1,8 +1,0 @@
-{
-    "name": "thingrtc-deno-deploy",
-    "private": true,
-    "dependencies": {
-        "thingrtc-pairing-server": "file:../../pairing-server",
-        "thingrtc-signalling-server": "file:../../signalling-server"
-    }
-}

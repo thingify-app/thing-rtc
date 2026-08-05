@@ -1,1 +1,1 @@
-deno run --allow-net --allow-env --unstable-broadcast-channel --watch main.ts
+deno run --allow-net --unstable-broadcast-channel --unstable-kv --watch main.ts

@@ -11,10 +11,6 @@ Advantages of Deno Deploy include:
 
 ## Initial setup
 - Install the Deno CLI tool.
-- Install dependencies:
-  ```
-  npm ci
-  ```
 
 ## Run locally
 - Run `./run.sh` to run locally with the required flags.
