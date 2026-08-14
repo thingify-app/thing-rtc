@@ -1,5 +1,5 @@
 {
     "deno.enable": true,
-    "deno.config": "./deployments/deno-deploy/deno.json",
-    "deno.enablePaths": ["./deployments/deno-deploy"]
+    "deno.config": "./signalling-server/deno.json",
+    "deno.enablePaths": ["./signalling-server"]
 }

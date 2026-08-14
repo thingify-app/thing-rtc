@@ -14,7 +14,7 @@
     },
     "dependencies": {
         "@zxing/browser": "^0.1.5",
-        "thingrtc-peer": "file:../../peer-web"
+        "thingrtc-peer": "file:../"
     },
     "browserslist": [
         "last 1 Chrome version"
