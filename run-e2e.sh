@@ -8,9 +8,6 @@ trap "trap - SIGTERM && kill -- -$$" SIGINT SIGTERM EXIT
 # Live-compile pairing-server library in background.
 npm --prefix pairing-server run buildWatch &
 
-# Live-compile signalling-server library in background.
-npm --prefix signalling-server run buildWatch &
-
 # Live-compile peer library in background.
 npm --prefix peer-web run buildWatch &
 

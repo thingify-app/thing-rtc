@@ -1,14 +1,11 @@
-import { BroadcastChannelConnectionChannelFactory, ConnectionChannel } from './connection-channel.ts';
+import { ConnectionChannel, ConnectionChannelFactory } from './connection-channel.ts';
 import { AuthValidator } from './auth-validator.ts';
 import { Socket } from './websocket.ts';
 import { z } from 'zod';
-import { attemptClaim, createEntry, clearEntry } from './kv.ts';
 
 const SESSION_TIMEOUT = 10 * 60 * 1000; // 10min
 
-const connectionChannelFactory = new BroadcastChannelConnectionChannelFactory();
-
-export function handleSignalling(socket: Socket, authValidator: AuthValidator): void {
+export function handleSignalling(socket: Socket, authValidator: AuthValidator, claimer: Claimer, connectionChannelFactory: ConnectionChannelFactory): void {
   let authed = false;
 
   // Automatically close the connection after timeout.
@@ -31,12 +28,12 @@ export function handleSignalling(socket: Socket, authValidator: AuthValidator): 
           // Initiator creates a channel and entry for responders to find.
           channelId = crypto.randomUUID();
           channel = await connectionChannelFactory.getConnectionChannel(channelId);
-          await createEntry(pairingId, channelId, nonce, SESSION_TIMEOUT);
+          await claimer.createEntry(pairingId, channelId, nonce, SESSION_TIMEOUT);
           console.log(`Created entry for channel ID ${channelId}`);
         } else {
           // Responder looks for any matching initiator entries, and tries to
           // claim one.
-          const entry = await attemptClaim(pairingId, SESSION_TIMEOUT);
+          const entry = await claimer.attemptClaim(pairingId, SESSION_TIMEOUT);
           if (!entry) {
             throw new Error('Could not claim!');
           }
@@ -81,7 +78,7 @@ export function handleSignalling(socket: Socket, authValidator: AuthValidator): 
           }));
 
           // In case we were an initiator and didn't find a partner, clear our entry.
-          await clearEntry(pairingId, channelId);
+          await claimer.clearEntry(pairingId, channelId);
           channel.close();
         });
 
@@ -93,6 +90,17 @@ export function handleSignalling(socket: Socket, authValidator: AuthValidator): 
       await socket.close();
     }
   });
+}
+
+export interface Entry {
+  channelId: string;
+  nonce: string;
+}
+
+export interface Claimer {
+  createEntry(pairingId: string, channelId: string, nonce: string, expiryMillis: number): Promise<void>;
+  attemptClaim(pairingId: string, timeoutMillis: number): Promise<Entry|null>;
+  clearEntry(pairingId: string, channelId: string): Promise<void>;
 }
 
 const Message = z.object({

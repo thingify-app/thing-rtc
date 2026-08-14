@@ -1,4 +1,6 @@
 import { ParseThroughAuthValidator } from "./auth-validator.ts";
+import { BroadcastChannelConnectionChannelFactory } from "./connection-channel.ts";
+import { KvClaimer } from "./kv.ts";
 import { handleSignalling } from "./signalling-server.ts";
 import { websocketToSocket } from "./websocket.ts";
 
@@ -15,11 +17,13 @@ Deno.serve(async req => {
 });
 
 const authValidator = new ParseThroughAuthValidator();
+const claimer = await KvClaimer.create();
+const connectionChannelFactory = new BroadcastChannelConnectionChannelFactory();
 
 async function handleSignallingRoute(req: Request): Promise<Response> {
   try {
     const { socket, response } = toWebSocket(req);
-    socket.onopen = () => handleSignalling(websocketToSocket(socket), authValidator);
+    socket.onopen = () => handleSignalling(websocketToSocket(socket), authValidator, claimer, connectionChannelFactory);
     return response;
   } catch (_) {
     return new Response("request isn't trying to upgrade to websocket.");
