@@ -1,6 +1,6 @@
 import { ParseThroughAuthValidator } from './auth-validator.ts';
 import { Socket } from './websocket.ts';
-import { Claimer, handleSignalling } from './signalling-server.ts';
+import { SignallingServer } from './signalling-server.ts';
 import { assert } from '@std/assert';
 import { assertEquals } from '@std/assert/equals';
 import { FakeTime } from '@std/testing/time';
@@ -79,7 +79,7 @@ class FakeSocket implements Socket {
   }
 }
 
-function authMsg(pairingId: string, role: string, nonce: string) {
+function authMsg(pairingId: string, role: string, nonce: string): string {
   const token = JSON.stringify({
     pairingId: pairingId,
     role: role,
@@ -94,15 +94,16 @@ function authMsg(pairingId: string, role: string, nonce: string) {
 const authValidator = new ParseThroughAuthValidator();
 const connectionChannelFactory = new BroadcastChannelConnectionChannelFactory();
 
-let claimer: Claimer;
+let signallingServer: SignallingServer;
 
 Deno.test.beforeEach(async () => {
-  claimer = await KvClaimer.create(true);
+  const claimer = await KvClaimer.create(true);
+  signallingServer = new SignallingServer(authValidator, claimer, connectionChannelFactory);
 });
 
 Deno.test('invalid outer JSON -> sends "error" and closes socket', async () => {
   const socket = new FakeSocket();
-  handleSignalling(socket, authValidator, claimer, connectionChannelFactory);
+  signallingServer.handleSignalling(socket);
   await socket.receive('not json{{{');
   assertEquals(socket.lastSent, 'error');
   assert(socket.closed);
@@ -110,7 +111,7 @@ Deno.test('invalid outer JSON -> sends "error" and closes socket', async () => {
 
 Deno.test('outer message failing Message schema -> error + close', async () => {
   const socket = new FakeSocket();
-  handleSignalling(socket, authValidator, claimer, connectionChannelFactory);
+  signallingServer.handleSignalling(socket);
 
   // missing required `type` field
   await socket.receive(JSON.stringify({ notType: 'x' }));
@@ -121,7 +122,7 @@ Deno.test('outer message failing Message schema -> error + close', async () => {
 
 Deno.test('auth data missing token/nonce -> error + close', async () => {
   const socket = new FakeSocket();
-  handleSignalling(socket, authValidator, claimer, connectionChannelFactory);
+  signallingServer.handleSignalling(socket);
 
   await socket.receive(JSON.stringify({ type: 'auth' })); // data defaults to '{}'
 
@@ -131,11 +132,11 @@ Deno.test('auth data missing token/nonce -> error + close', async () => {
 
 Deno.test('both peers receive peerConnect once claimed', async () => {
   const socketA = new FakeSocket();
-  handleSignalling(socketA, authValidator, claimer, connectionChannelFactory);
+  signallingServer.handleSignalling(socketA);
   await socketA.receive(authMsg('pairIdFoo', 'initiator', 'nonce-INIT'));
 
   const socketB = new FakeSocket();
-  handleSignalling(socketB, authValidator, claimer, connectionChannelFactory);
+  signallingServer.handleSignalling(socketB);
   await socketB.receive(authMsg('pairIdFoo', 'responder', 'nonce-RESP'));
 
   assertEquals(JSON.parse(await socketA.waitForMessage()), { type: 'peerConnect', nonce: 'nonce-RESP' });
@@ -159,7 +160,7 @@ Deno.test('responder: no matching initiator entry -> error + close', async () =>
   const time = new FakeTime();
 
   const socket = new FakeSocket();
-  handleSignalling(socket, authValidator, claimer, connectionChannelFactory);
+  signallingServer.handleSignalling(socket);
 
   await socket.receive(authMsg('pairIdFoo', 'responder', 'nonce-RESP'));
 
@@ -173,11 +174,11 @@ Deno.test('responder: no matching initiator entry -> error + close', async () =>
 Deno.test('responder: claims entry and exchanges peerConnect nonces both ways', async () => {
   const initSocket = new FakeSocket();
 
-  handleSignalling(initSocket, authValidator, claimer, connectionChannelFactory);
+  signallingServer.handleSignalling(initSocket);
   await initSocket.receive(authMsg('pairIdFoo', 'initiator', 'nonce-INIT'));
 
   const respSocket = new FakeSocket();
-  handleSignalling(respSocket, authValidator, claimer, connectionChannelFactory);
+  signallingServer.handleSignalling(respSocket);
   await respSocket.receive(authMsg('pairIdFoo', 'responder', 'nonce-RESP'));
 
   // Responder's own socket gets the initiator's nonce back.
@@ -192,11 +193,11 @@ Deno.test('responder: claims entry and exchanges peerConnect nonces both ways', 
 Deno.test('peerDisconnect from channel closes the local socket', async () => { 
   const initSocket = new FakeSocket();
 
-  handleSignalling(initSocket, authValidator, claimer, connectionChannelFactory);
+  signallingServer.handleSignalling(initSocket);
   await initSocket.receive(authMsg('pairIdFoo', 'initiator', 'nonce-INIT'));
 
   const respSocket = new FakeSocket();
-  handleSignalling(respSocket, authValidator, claimer, connectionChannelFactory);
+  signallingServer.handleSignalling(respSocket);
   await respSocket.receive(authMsg('pairIdFoo', 'responder', 'nonce-RESP'));
 
   // Responder disconnects -> its onClose handler broadcasts peerDisconnect.
@@ -210,7 +211,7 @@ Deno.test('peerDisconnect from channel closes the local socket', async () => {
 Deno.test('socket is force-closed after SESSION_TIMEOUT even if never authed', async () => {
   using time = new FakeTime();
   const socket = new FakeSocket();
-  handleSignalling(socket, authValidator, claimer, connectionChannelFactory);
+  signallingServer.handleSignalling(socket);
 
   assert(!socket.closed);
   await time.tickAsync(10 * 60 * 1000);
@@ -219,7 +220,7 @@ Deno.test('socket is force-closed after SESSION_TIMEOUT even if never authed', a
 
 Deno.test('sending a second auth message post-auth does not create a second entry/channel', async () => {
   const socket = new FakeSocket();
-  handleSignalling(socket, authValidator, claimer, connectionChannelFactory);
+  signallingServer.handleSignalling(socket);
 
   await socket.receive(authMsg('pairIdFoo', 'initiator', 'nonce-1'));
   assertEquals(socket.sent.length, 0);
