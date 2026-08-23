@@ -34,7 +34,7 @@ func (p *peerTask) AttemptConnect(serverAuth ServerAuth, peerConfig *peerconfig.
 	peerConnectionFailed := make(chan interface{})
 	peerConnectionSuccess := make(chan interface{})
 
-	server := NewSignallingServer(p.serverUrl, serverAuth, peerConfig.PeerAuth)
+	server := NewSignallingServer(p.serverUrl, serverAuth, peerConfig)
 	peerConnection, err := createPeerConnection(p.codecs, detachDataChannels)
 	if err != nil {
 		return err

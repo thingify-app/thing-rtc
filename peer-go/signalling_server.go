@@ -20,7 +20,7 @@ import (
 type SignallingServer struct {
 	URL        string
 	ServerAuth ServerAuth
-	PeerAuth   peerconfig.PeerAuth
+	PeerConfig *peerconfig.PeerConfig
 
 	socket      *websocket.Conn
 	connected   bool
@@ -36,11 +36,11 @@ type SignallingServer struct {
 	errorListener          func(err error)
 }
 
-func NewSignallingServer(serverUrl string, serverAuth ServerAuth, peerAuth peerconfig.PeerAuth) SignallingServer {
+func NewSignallingServer(serverUrl string, serverAuth ServerAuth, peerConfig *peerconfig.PeerConfig) SignallingServer {
 	return SignallingServer{
 		URL:        serverUrl,
 		ServerAuth: serverAuth,
-		PeerAuth:   peerAuth,
+		PeerConfig: peerConfig,
 
 		sendChan: make(chan interface{}),
 
@@ -66,7 +66,8 @@ func (s *SignallingServer) Connect() {
 	s.connected = true
 
 	go func() {
-		socket, _, err := websocket.DefaultDialer.Dial(s.URL, http.Header{})
+		url := s.URL + "/" + s.PeerConfig.PairingId
+		socket, _, err := websocket.DefaultDialer.Dial(url, http.Header{})
 		s.socket = socket
 		if err != nil {
 			s.errorListener(err)
@@ -75,7 +76,7 @@ func (s *SignallingServer) Connect() {
 
 		s.startSendLoop()
 
-		localNonce := s.PeerAuth.GenerateNonce()
+		localNonce := s.PeerConfig.PeerAuth.GenerateNonce()
 		token := s.ServerAuth.GenerateToken()
 		err = s.sendAuthMessage(localNonce, token)
 		if err != nil {
@@ -191,7 +192,7 @@ func (s *SignallingServer) sendSignedMessage(msgType string, data interface{}) e
 
 	jsonData := string(jsonBytes)
 
-	signature, err := s.PeerAuth.SignMessage(jsonData)
+	signature, err := s.PeerConfig.PeerAuth.SignMessage(jsonData)
 	if err != nil {
 		return err
 	}
@@ -284,7 +285,7 @@ func (s *SignallingServer) verifyMessage(localNonce string, message signedMessag
 		return fmt.Errorf("invalid nonce received: '%v', expected: '%v'", nonceData.Nonce, localNonce)
 	}
 
-	validSignature := s.PeerAuth.VerifyMessage(message.Signature, message.Data)
+	validSignature := s.PeerConfig.PeerAuth.VerifyMessage(message.Signature, message.Data)
 	if !validSignature {
 		return fmt.Errorf("invalid signature '%v' on message: '%v'", message.Signature, message.Data)
 	}

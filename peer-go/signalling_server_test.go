@@ -6,6 +6,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v3"
+	peerconfig "github.com/thingify-app/thing-rtc/peer-go/peer-config"
 )
 
 type PeerConnectMessage struct {
@@ -325,10 +326,14 @@ func TestInvalidSignatureMessage(t *testing.T) {
 	serverAuth := MockServerAuth{
 		Token: "token",
 	}
-	peerAuth := &MockPeerAuth{
+	peerAuth := MockPeerAuth{
 		Nonce:        "nonce",
 		Signature:    "foobar",
 		VerifyResult: false,
+	}
+	peerConfig := &peerconfig.PeerConfig{
+		PairingId: "foobar",
+		PeerAuth:  peerAuth,
 	}
 
 	actions := func(conn *websocket.Conn) {
@@ -352,7 +357,7 @@ func TestInvalidSignatureMessage(t *testing.T) {
 		// Assert close is received
 	}
 
-	signallingServer, channels := createSignallingServerWithAuth(serverAuth, peerAuth, actions)
+	signallingServer, channels := createSignallingServerWithAuth(serverAuth, peerConfig, actions)
 	signallingServer.Connect()
 
 	select {

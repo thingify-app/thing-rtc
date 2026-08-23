@@ -16,7 +16,7 @@ import (
 	// _ "github.com/thingify-app/thing-rtc/peer-go/driver/camera"
 )
 
-const SIGNALLING_SERVER_URL = "wss://thingify.deno.dev/signalling"
+const SIGNALLING_SERVER_URL = "wss://signalling.thingify.app/signalling"
 
 func main() {
 	app := &cli.App{

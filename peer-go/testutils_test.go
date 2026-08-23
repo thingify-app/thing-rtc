@@ -69,16 +69,21 @@ func createSignallingServer(actions func(conn *websocket.Conn)) (*SignallingServ
 		Signature:    "signature",
 		VerifyResult: true,
 	}
+	peerConfig := &peerconfig.PeerConfig{
+		PeerAuth:  peerAuth,
+		PairingId: "foobar",
+		Role:      "initiator",
+	}
 
-	return createSignallingServerWithAuth(serverAuth, peerAuth, actions)
+	return createSignallingServerWithAuth(serverAuth, peerConfig, actions)
 }
 
-func createSignallingServerWithAuth(serverAuth ServerAuth, peerAuth peerconfig.PeerAuth, actions func(conn *websocket.Conn)) (*SignallingServer, *ServerChannels) {
+func createSignallingServerWithAuth(serverAuth ServerAuth, peerConfig *peerconfig.PeerConfig, actions func(conn *websocket.Conn)) (*SignallingServer, *ServerChannels) {
 	server := createWebsocketServer(actions)
 	// SignallingServer requires a "ws://" URL rather than "http://"
 	url := strings.Replace(server.URL, "http", "ws", 1)
 
-	signallingServer := NewSignallingServer(url, serverAuth, peerAuth)
+	signallingServer := NewSignallingServer(url, serverAuth, peerConfig)
 
 	peerConnect := make(chan interface{})
 	peerDisconnect := make(chan interface{})
