@@ -8,22 +8,19 @@
     <body>
         <div class="box">
             <h1>Peer Setup</h1>
+            <p>Local public key:</p>
+            <div id="localPublicKey"></div>
+            <button id="resetLocalKeyButton">Reset local key</button>
             <p>Role:</p>
             <input type="radio" id="initiator" name="role" checked/>
             <label for="initiator">Initiator</label>
             <input type="radio" id="responder" name="role"/>
             <label for="responder">Responder</label>
-            <div id="initiatorBox">
-                <div id="sharedSecret"></div>
-            </div>
-            <div id="responderBox">
-                <input type="text" id="responderSharedSecret" placeholder="Peer ID"/>
-                <button id="setSharedSecretButton">Set</button>
-                <p><video id="qrCodeVideo" autoplay playsinline></video></p>
-                <div id="responderStatus"></div>
-            </div>
-            <button id="saveConfigButton">Save config</button>
-            <button id="clearConfigButton">Clear config</button>
+            <p>Peer keys:</p>
+            <input type="text" id="peerPublicKey" placeholder="Peer public key"/>
+            <button id="addPeerPublicKey">Add</button>
+            <div id="remoteKeysList"></div>
+            <button id="deletePeerPublicKey">Delete key</button>
         </div>
         <div class="box">
             <h1>Connection</h1>

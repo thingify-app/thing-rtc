@@ -1,21 +1,15 @@
-import { createInitiatorConfig, createInitiatorConfigWithSecret, createResponderConfig, InsecureServerAuth, Listeners, PeerConfig, SharedSecretConfig, ThingPeer } from 'thingrtc-peer';
-import { BrowserQRCodeReader, BrowserQRCodeSvgWriter, IScannerControls } from '@zxing/browser';
+import { InsecureServerAuth, Listeners, LocalKeyPair, PeerConfig, RemoteKey, ThingPeer, WebCrypto } from 'thingrtc-peer';
 
 const initiatorRadio = document.getElementById('initiator') as HTMLInputElement;
 const responderRadio = document.getElementById('responder') as HTMLInputElement;
 
-const initiatorBox = document.getElementById('initiatorBox') as HTMLDivElement;
-const responderBox = document.getElementById('responderBox') as HTMLDivElement;
+const localPublicKeyBox = document.getElementById('localPublicKey') as HTMLDivElement;
 
-const sharedSecretBox = document.getElementById('sharedSecret') as HTMLDivElement;
-
-const responderSharedSecretText = document.getElementById('responderSharedSecret') as HTMLInputElement;
-const setSharedSecretButton = document.getElementById('setSharedSecretButton') as HTMLButtonElement;
-const qrCodeVideo = document.getElementById('qrCodeVideo') as HTMLVideoElement;
-const responderStatusBox = document.getElementById('responderStatus') as HTMLDivElement;;
-
-const saveConfigButton = document.getElementById('saveConfigButton') as HTMLButtonElement;
-const clearConfigButton = document.getElementById('clearConfigButton') as HTMLButtonElement;
+const peerPublicKeyText = document.getElementById('peerPublicKey') as HTMLInputElement;
+const addPeerPublicKeyButton = document.getElementById('addPeerPublicKey') as HTMLButtonElement;
+const resetLocalKeyButton = document.getElementById('resetLocalKeyButton') as HTMLButtonElement;
+const remoteKeysList = document.getElementById('remoteKeysList') as HTMLUListElement;
+const deletePeerPublicKeyButton = document.getElementById('deletePeerPublicKey') as HTMLButtonElement;
 
 const sendVideoCheckbox = document.getElementById('sendVideo') as HTMLInputElement;
 const connectButton = document.getElementById('connectButton') as HTMLButtonElement;
@@ -39,69 +33,42 @@ const remoteVideo = document.getElementById('remoteVideo') as HTMLVideoElement;
 const remoteMediaStream = new MediaStream();
 
 const localhost = location.hostname === 'localhost';
-const signallingServer = localhost ? `ws://localhost:8000/signalling` : `wss://dev.thingify.app/signalling`;
+const signallingServer = localhost ? `ws://localhost:8787/signalling` : `wss://signalling.thingify.app/signalling`;
 
-const sharedSecretStorageKey = 'SHARED_SECRET_STORAGE';
+const PEER_KEY_STORAGE_KEY = 'PEER_PUBLIC_KEYS';
 
-let sharedSecretConfig: SharedSecretConfig|null = null;
+let localKeyPair: LocalKeyPair|null = null;
+let remoteKeys: RemoteKey[] = [];
 let peer: ThingPeer|null = null;
-
-let qrScannerControl: IScannerControls|null = null;
 
 let speedTestActive = false;
 let receivedFileBytes = 0;
 
 disconnectButton.disabled = true;
-initiatorBox.style.display = 'block';
-responderBox.style.display = 'none';
-qrCodeVideo.style.display = 'none';
-
 stopSpeedTestButton.disabled = true;
 
 setup();
 
-initiatorRadio.addEventListener('change', async () => {
-    if (initiatorRadio.checked) {
-        initiatorBox.style.display = 'block';
-        responderBox.style.display = 'none';
-        qrScannerControl?.stop();
-        await setupInitiator();
-    }
-});
-
-responderRadio.addEventListener('change', async () => {
-    if (responderRadio.checked) {
-        initiatorBox.style.display = 'none';
-        responderBox.style.display = 'block';
-        
-        await setupResponder();
-    }
-});
-
-setSharedSecretButton.addEventListener('click', async () => {
-    const peerConfig = await createResponderConfig(responderSharedSecretText.value);
-    sharedSecretConfig = {
-        peerConfig,
-        secretBase64: responderSharedSecretText.value,
-    };
-});
-
-saveConfigButton.addEventListener('click', async () => {
-    if (!sharedSecretConfig) {
-        alert('No peer config set!');
-    }
-    window.localStorage.setItem(sharedSecretStorageKey, sharedSecretConfig!.secretBase64);
-
-    // Reload UI to show config:
+resetLocalKeyButton.addEventListener('click', async () => {
+    await LocalKeyPair.clearLocalKeyPair();
     await setup();
 });
 
-clearConfigButton.addEventListener('click', async () => {
-    window.localStorage.removeItem(sharedSecretStorageKey);
-    sharedSecretConfig = null;
+addPeerPublicKeyButton.addEventListener('click', async () => {
+    try {
+        remoteKeys.push(await RemoteKey.createRemoteKey(peerPublicKeyText.value));
+        await saveRemoteKeys();
+    } catch (e) {
+        alert(`Error saving key: ${e}`);
+    }
+});
 
-    // Reload UI to show config:
-    await setup();
+deletePeerPublicKeyButton.addEventListener('click', async () => {
+    const selectedRemoteKey = document.querySelector('input[name="remoteKeys"]:checked') as HTMLInputElement|null;
+    if (selectedRemoteKey) {
+        remoteKeys = remoteKeys.filter(key => key.publicKeyRaw !== selectedRemoteKey.value);
+        await saveRemoteKeys();
+    }
 });
 
 connectButton.addEventListener('click', async () => {
@@ -110,12 +77,17 @@ connectButton.addEventListener('click', async () => {
         return;
     }
 
-    if (!sharedSecretConfig) {
-        alert('Peer not configured!');
+    const selectedRemoteKey = document.querySelector('input[name="remoteKeys"]:checked') as HTMLInputElement|null;
+    if (!selectedRemoteKey) {
+        alert('No remote key selected!');
         return;
     }
 
-    peer = createPeer(sharedSecretConfig.peerConfig);
+    const role = initiatorRadio.checked ? 'initiator' : 'responder';
+    const remoteKey = await RemoteKey.createRemoteKey(selectedRemoteKey.value);
+    const peerConfig = await WebCrypto.createConfig(remoteKey, localKeyPair!, role);
+
+    peer = createPeer(peerConfig);
 
     connectButton.disabled = true;
     disconnectButton.disabled = false;
@@ -194,66 +166,38 @@ stopSpeedTestButton.addEventListener('click', () => {
 });
 
 async function setup() {
-    if (initiatorRadio.checked) {
-        await setupInitiator();
+    const loaded = await LocalKeyPair.loadLocalKeyPair();
+    if (loaded) {
+        localKeyPair = loaded;
     } else {
-        await setupResponder();
+        localKeyPair = await LocalKeyPair.createLocalKeyPair();
+        await localKeyPair.save();
     }
+    localPublicKeyBox.innerHTML = '';
+    localPublicKeyBox.appendChild(document.createTextNode(localKeyPair.publicKeyRaw));
+
+    await loadRemoteKeys();
 }
 
-async function setupInitiator() {
-    const sharedSecret = loadSharedSecret();
+async function loadRemoteKeys() {
+    remoteKeys = [];
 
-    if (sharedSecret) {
-        const peerConfig = await createInitiatorConfigWithSecret(sharedSecret);
-        sharedSecretConfig = {
-            peerConfig,
-            secretBase64: sharedSecret,
-        };
-    } else {
-        sharedSecretConfig = await createInitiatorConfig();
+    const saved = window.localStorage.getItem(PEER_KEY_STORAGE_KEY);
+    if (saved) {
+        const data = JSON.parse(saved) as string[];
+        for (const key of data) {
+            const remoteKey = await RemoteKey.createRemoteKey(key);
+            remoteKeys.push(remoteKey);
+        }
     }
 
-    const qrCodeWriter = new BrowserQRCodeSvgWriter();
-    sharedSecretBox.innerHTML = '';
-    qrCodeWriter.writeToDom(sharedSecretBox, sharedSecretConfig.secretBase64, 256, 256);
-    sharedSecretBox.appendChild(document.createTextNode(sharedSecretConfig.secretBase64));
+    createRadioButtons(remoteKeysList, 'remoteKeys', remoteKeys.map(key => key.publicKeyRaw));
 }
 
-async function setupResponder() {
-    const sharedSecret = loadSharedSecret();
-
-    if (sharedSecret) {
-        await loadResponderConfig(sharedSecret);
-    } else {
-        qrCodeVideo.style.display = 'block';
-        const qrCodeReader = new BrowserQRCodeReader();
-        qrScannerControl = await qrCodeReader.decodeFromVideoDevice(undefined, qrCodeVideo, async (result, err) => {
-            if (!err) {
-                const sharedSecret = result?.getText()!;
-                try {
-                    await loadResponderConfig(sharedSecret);                    
-                } catch (e) {
-                    alert('Failed to load shared secret: ' + e);
-                }
-            }
-        });
-    }
-}
-
-async function loadResponderConfig(sharedSecret: string) {
-    const peerConfig = await createResponderConfig(sharedSecret);
-    sharedSecretConfig = {
-        peerConfig,
-        secretBase64: sharedSecret,
-    };
-    qrCodeVideo.style.display = 'none';
-    responderStatusBox.innerText = `Loaded shared secret.`;
-    qrScannerControl?.stop();
-}
-
-function loadSharedSecret(): string|null {
-    return window.localStorage.getItem(sharedSecretStorageKey);
+async function saveRemoteKeys() {
+    const data = JSON.stringify(remoteKeys.map(key => key.publicKeyRaw));
+    window.localStorage.setItem(PEER_KEY_STORAGE_KEY, data);
+    await loadRemoteKeys();
 }
 
 async function getCamera(): Promise<MediaStream> {
@@ -261,23 +205,24 @@ async function getCamera(): Promise<MediaStream> {
 }
 
 function reloadDataChannels() {
-    dataChannelList.innerHTML = '';
+    const dcs = peer?.getDataChannels() ?? [];
+    createRadioButtons(dataChannelList, 'dataChannels', dcs.map(dc => dc.getLabel()));
+}
 
-    const dcs = peer?.getDataChannels();
-    if (dcs) {
-        for (const dc of dcs) {
-            const radio = document.createElement('input');
-            radio.type = 'radio';
-            radio.name = 'dataChannels';
-            radio.id = dc.getLabel();
-            radio.value = dc.getLabel();
-            dataChannelList.appendChild(radio);
+function createRadioButtons(parent: HTMLElement, name: string, labels: string[]) {
+    parent.innerHTML = '';
+    for (const l of labels) {
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = name;
+        radio.id = l;
+        radio.value = l;
+        parent.appendChild(radio);
 
-            const label = document.createElement('label');
-            label.setAttribute('for', dc.getLabel());
-            label.textContent = dc.getLabel();
-            dataChannelList.appendChild(label);
-        }
+        const label = document.createElement('label');
+        label.setAttribute('for', l);
+        label.textContent = l;
+        parent.appendChild(label);
     }
 }
 
