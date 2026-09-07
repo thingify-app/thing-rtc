@@ -1,4 +1,4 @@
-import { InsecureServerAuth, Listeners, LocalKeyPair, PeerConfig, RemoteKey, ThingPeer, WebCrypto } from 'thingrtc-peer';
+import { InsecureServerAuth, Listeners, LocalKeyPair, PeerConfig, RemoteKey, ThingPeer, KeyPair } from 'thingrtc-peer';
 
 const initiatorRadio = document.getElementById('initiator') as HTMLInputElement;
 const responderRadio = document.getElementById('responder') as HTMLInputElement;
@@ -66,7 +66,7 @@ addPeerPublicKeyButton.addEventListener('click', async () => {
 deletePeerPublicKeyButton.addEventListener('click', async () => {
     const selectedRemoteKey = document.querySelector('input[name="remoteKeys"]:checked') as HTMLInputElement|null;
     if (selectedRemoteKey) {
-        remoteKeys = remoteKeys.filter(key => key.publicKeyRaw !== selectedRemoteKey.value);
+        remoteKeys = remoteKeys.filter(key => key.publicKeySpki !== selectedRemoteKey.value);
         await saveRemoteKeys();
     }
 });
@@ -85,7 +85,7 @@ connectButton.addEventListener('click', async () => {
 
     const role = initiatorRadio.checked ? 'initiator' : 'responder';
     const remoteKey = await RemoteKey.createRemoteKey(selectedRemoteKey.value);
-    const peerConfig = await WebCrypto.createConfig(remoteKey, localKeyPair!, role);
+    const peerConfig = await KeyPair.createConfig(remoteKey, localKeyPair!, role);
 
     peer = createPeer(peerConfig);
 
@@ -174,7 +174,7 @@ async function setup() {
         await localKeyPair.save();
     }
     localPublicKeyBox.innerHTML = '';
-    localPublicKeyBox.appendChild(document.createTextNode(localKeyPair.publicKeyRaw));
+    localPublicKeyBox.appendChild(document.createTextNode(localKeyPair.publicKeySpki));
 
     await loadRemoteKeys();
 }
@@ -191,11 +191,11 @@ async function loadRemoteKeys() {
         }
     }
 
-    createRadioButtons(remoteKeysList, 'remoteKeys', remoteKeys.map(key => key.publicKeyRaw));
+    createRadioButtons(remoteKeysList, 'remoteKeys', remoteKeys.map(key => key.publicKeySpki));
 }
 
 async function saveRemoteKeys() {
-    const data = JSON.stringify(remoteKeys.map(key => key.publicKeyRaw));
+    const data = JSON.stringify(remoteKeys.map(key => key.publicKeySpki));
     window.localStorage.setItem(PEER_KEY_STORAGE_KEY, data);
     await loadRemoteKeys();
 }

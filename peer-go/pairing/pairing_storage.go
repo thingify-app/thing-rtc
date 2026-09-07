@@ -172,17 +172,17 @@ func (s *filePairingStorage) parseFile() (pairingMap, error) {
 
 	data := make(map[string]pairingData)
 	for k, v := range storedData {
-		remotePublicKey, err := s.keyOperations.importJwkPublicKey(v.RemotePublicKeyJwk)
+		remotePublicKey, err := s.keyOperations.ImportJwkPublicKey(v.RemotePublicKeyJwk)
 		if err != nil {
 			return nil, err
 		}
 
-		localPublicKey, err := s.keyOperations.importJwkPublicKey(v.LocalPublicKeyJwk)
+		localPublicKey, err := s.keyOperations.ImportJwkPublicKey(v.LocalPublicKeyJwk)
 		if err != nil {
 			return nil, err
 		}
 
-		localPrivateKey, err := s.keyOperations.importJwkPrivateKey(v.LocalPrivateKeyJwk)
+		localPrivateKey, err := s.keyOperations.ImportJwkPrivateKey(v.LocalPrivateKeyJwk)
 		if err != nil {
 			return nil, err
 		}
@@ -210,9 +210,9 @@ func (s *filePairingStorage) commitFile(data pairingMap) error {
 		storedData[k] = storedPairingData{
 			Role:               v.role,
 			ServerToken:        v.serverToken,
-			RemotePublicKeyJwk: v.remotePublicKey.exportJwk(),
-			LocalPublicKeyJwk:  v.localKeyPair.PublicKey.exportJwk(),
-			LocalPrivateKeyJwk: v.localKeyPair.PrivateKey.exportJwk(),
+			RemotePublicKeyJwk: v.remotePublicKey.ExportJwk(),
+			LocalPublicKeyJwk:  v.localKeyPair.PublicKey.ExportJwk(),
+			LocalPrivateKeyJwk: v.localKeyPair.PrivateKey.ExportJwk(),
 			RemoteMetadata:     v.remoteMetadata,
 			LocalMetadata:      v.localMetadata,
 		}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"time"
@@ -28,9 +29,12 @@ func main() {
 				Usage: "Connect to a peer",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:     "secret",
-						Usage:    "shared secret of the peer to connect to",
-						Required: true,
+						Name:  "secret",
+						Usage: "shared secret of the peer to connect to",
+					},
+					&cli.StringFlag{
+						Name:  "peerPublicKey",
+						Usage: "public key of the peer to connect to",
 					},
 					&cli.StringFlag{
 						Name:  "role",
@@ -40,7 +44,24 @@ func main() {
 					},
 				},
 				Action: func(ctx *cli.Context) error {
-					return connect(ctx.String("secret"), ctx.String("role"))
+					role := peerconfig.Role(ctx.String("role"))
+
+					var peerConfig *peerconfig.PeerConfig
+					var err error
+					if ctx.IsSet("secret") {
+						peerConfig, err = sharedSecretPeerConfig(ctx.String("secret"), role)
+					} else if ctx.IsSet("peerPublicKey") {
+						peerConfig, err = keyPairPeerConfig(ctx.String("peerPublicKey"), role)
+					} else {
+						err = fmt.Errorf("Either secret or peerPublicKey must be specified!")
+					}
+
+					if err != nil {
+						return err
+					}
+
+					connect(peerConfig)
+					return nil
 				},
 			},
 		},
@@ -63,7 +84,7 @@ func createVideoSource() *thingrtc.MediaSource {
 	return videoSource
 }
 
-func connect(sharedSecretBase64 string, role string) error {
+func sharedSecretPeerConfig(sharedSecretBase64 string, role peerconfig.Role) (*peerconfig.PeerConfig, error) {
 	var peerConfig *peerconfig.PeerConfig
 	var err error
 
@@ -73,13 +94,34 @@ func connect(sharedSecretBase64 string, role string) error {
 	case "responder":
 		peerConfig, err = peerconfig.CreateResponderConfig(sharedSecretBase64)
 	default:
-		return fmt.Errorf("Invalid role type, expected initiator/responder")
+		err = fmt.Errorf("Invalid role type, expected initiator/responder")
 	}
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	return peerConfig, nil
+}
+
+func keyPairPeerConfig(remoteKeySpki string, role peerconfig.Role) (*peerconfig.PeerConfig, error) {
+	remoteKey, err := peerconfig.CreateRemoteKey(remoteKeySpki)
+	if err != nil {
+		return nil, err
+	}
+
+	localKeyPair, err := peerconfig.CreateLocalKeyPair()
+	if err != nil {
+		return nil, err
+	}
+
+	spki := base64.StdEncoding.EncodeToString(localKeyPair.PublicKey.ExportSpki())
+	fmt.Printf("Local public key is: %v\n", spki)
+
+	return peerconfig.CreateKeyPairConfig(remoteKey, localKeyPair, role)
+}
+
+func connect(peerConfig *peerconfig.PeerConfig) {
 	serverAuth := thingrtc.CreateInsecureServerAuth(peerConfig.PairingId, peerConfig.Role)
 	peer := thingrtc.NewPeerWithMedia(SIGNALLING_SERVER_URL, serverAuth, peerConfig, false, createVideoSource())
 

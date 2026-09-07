@@ -5,6 +5,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -17,19 +18,22 @@ const NONCE_BYTES = 18
 // KeyOperations represents the set of starting points for a particular public
 // key cryptography implementation.
 type KeyOperations interface {
-	importJwkPublicKey(jwk string) (PublicKey, error)
-	importJwkPrivateKey(jwk string) (PrivateKey, error)
-	generateKeyPair() (KeyPair, error)
+	ImportSpkiPublicKey(spki []byte) (PublicKey, error)
+	ImportJwkPublicKey(jwk string) (PublicKey, error)
+	ImportJwkPrivateKey(jwk string) (PrivateKey, error)
+	GenerateKeyPair() (KeyPair, error)
 }
 
 type PublicKey interface {
-	verifyMessage(signature []byte, message string) bool
-	exportJwk() string
+	VerifyMessage(signature []byte, message string) bool
+	ExportJwk() string
+	ExportSpki() []byte
+	Fingerprint() string
 }
 
 type PrivateKey interface {
-	signMessage(message string) ([]byte, error)
-	exportJwk() string
+	SignMessage(message string) ([]byte, error)
+	ExportJwk() string
 }
 
 type KeyPair struct {
@@ -62,8 +66,22 @@ func NewEcdsaKeyOperationsWithRand(rand io.Reader) KeyOperations {
 	return ecdsaKeyOperations{rand}
 }
 
+func (ecdsaKeyOperations) ImportSpkiPublicKey(spki []byte) (key PublicKey, err error) {
+	publicKey, err := x509.ParsePKIXPublicKey(spki)
+	if err != nil {
+		return nil, err
+	}
+
+	ecdsaPublicKey, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("Failed to parse key as ECDSA")
+	}
+
+	return newEcdsaPublicKey(ecdsaPublicKey)
+}
+
 // Imports a JWK-encoded ECDSA public key using the P-256 curve into our PublicKey representation.
-func (ecdsaKeyOperations) importJwkPublicKey(jwk string) (key PublicKey, err error) {
+func (ecdsaKeyOperations) ImportJwkPublicKey(jwk string) (key PublicKey, err error) {
 	members := struct {
 		Kty string
 		Crv string
@@ -99,14 +117,12 @@ func (ecdsaKeyOperations) importJwkPublicKey(jwk string) (key PublicKey, err err
 		X:     x,
 		Y:     y,
 	}
-	key = ecdsaPublicKey{
-		publicKey,
-	}
+	key, err = newEcdsaPublicKey(publicKey)
 
 	return
 }
 
-func (e ecdsaKeyOperations) importJwkPrivateKey(data string) (PrivateKey, error) {
+func (e ecdsaKeyOperations) ImportJwkPrivateKey(data string) (PrivateKey, error) {
 	members := struct {
 		Kty string
 		Crv string
@@ -159,16 +175,19 @@ func (e ecdsaKeyOperations) importJwkPrivateKey(data string) (PrivateKey, error)
 }
 
 // Generates an ECDSA key pair using the P-256 curve.
-func (e ecdsaKeyOperations) generateKeyPair() (keyPair KeyPair, err error) {
+func (e ecdsaKeyOperations) GenerateKeyPair() (keyPair KeyPair, err error) {
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), e.rand)
 	if err != nil {
 		return
 	}
 
+	publicKey, err := newEcdsaPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return
+	}
+
 	keyPair = KeyPair{
-		PublicKey: ecdsaPublicKey{
-			&privateKey.PublicKey,
-		},
+		PublicKey: publicKey,
 		PrivateKey: ecdsaPrivateKey{
 			privateKey,
 			e.rand,
@@ -177,8 +196,29 @@ func (e ecdsaKeyOperations) generateKeyPair() (keyPair KeyPair, err error) {
 	return
 }
 
+func newEcdsaPublicKey(publicKey *ecdsa.PublicKey) (PublicKey, error) {
+	spki, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return nil, err
+	}
+
+	keyDigest := sha256.Sum256(spki)
+	fingerprint := base64.StdEncoding.EncodeToString(keyDigest[:])
+
+	return ecdsaPublicKey{
+		publicKey:   publicKey,
+		spki:        spki,
+		fingerprint: fingerprint,
+	}, nil
+}
+
 type ecdsaPublicKey struct {
 	publicKey *ecdsa.PublicKey
+
+	// SPKI and fingerprint are derived from publicKey, but precomputed and
+	// stored in the struct to catch all errors at creation time.
+	spki        []byte
+	fingerprint string
 }
 
 type ecdsaPrivateKey struct {
@@ -186,7 +226,7 @@ type ecdsaPrivateKey struct {
 	rand       io.Reader
 }
 
-func (e ecdsaPublicKey) verifyMessage(signature []byte, message string) bool {
+func (e ecdsaPublicKey) VerifyMessage(signature []byte, message string) bool {
 	hash := sha256.Sum256([]byte(message))
 
 	signatureLen := len(signature)
@@ -204,7 +244,7 @@ func (e ecdsaPublicKey) verifyMessage(signature []byte, message string) bool {
 	return ecdsa.Verify(e.publicKey, hash[:], &r, &s)
 }
 
-func (e ecdsaPublicKey) exportJwk() string {
+func (e ecdsaPublicKey) ExportJwk() string {
 	members := struct {
 		Kty string `json:"kty"`
 		Crv string `json:"crv"`
@@ -221,7 +261,15 @@ func (e ecdsaPublicKey) exportJwk() string {
 	return string(jwk)
 }
 
-func (e ecdsaPrivateKey) signMessage(message string) ([]byte, error) {
+func (e ecdsaPublicKey) ExportSpki() []byte {
+	return e.spki
+}
+
+func (e ecdsaPublicKey) Fingerprint() string {
+	return e.fingerprint
+}
+
+func (e ecdsaPrivateKey) SignMessage(message string) ([]byte, error) {
 	hash := sha256.Sum256([]byte(message))
 	r, s, err := ecdsa.Sign(e.rand, e.privateKey, hash[:])
 	if err != nil {
@@ -235,7 +283,7 @@ func (e ecdsaPrivateKey) signMessage(message string) ([]byte, error) {
 	return signatureBytes, nil
 }
 
-func (e ecdsaPrivateKey) exportJwk() string {
+func (e ecdsaPrivateKey) ExportJwk() string {
 	members := struct {
 		Kty string `json:"kty"`
 		Crv string `json:"crv"`

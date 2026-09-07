@@ -16,11 +16,11 @@ func createFilePairingStorage() (PairingStorage, *os.File) {
 
 func createPairingData(pairingId string) pairingData {
 	keyOperations := NewEcdsaKeyOperationsWithRand(onesReader)
-	remoteKeyPair, err := keyOperations.generateKeyPair()
+	remoteKeyPair, err := keyOperations.GenerateKeyPair()
 	if err != nil {
 		panic(err)
 	}
-	localKeyPair, err := keyOperations.generateKeyPair()
+	localKeyPair, err := keyOperations.GenerateKeyPair()
 	if err != nil {
 		panic(err)
 	}
@@ -105,11 +105,11 @@ func TestMissingMetadata(t *testing.T) {
 	pairingStorage, _ := createFilePairingStorage()
 
 	keyOperations := NewEcdsaKeyOperationsWithRand(onesReader)
-	remoteKeyPair, err := keyOperations.generateKeyPair()
+	remoteKeyPair, err := keyOperations.GenerateKeyPair()
 	if err != nil {
 		panic(err)
 	}
-	localKeyPair, err := keyOperations.generateKeyPair()
+	localKeyPair, err := keyOperations.GenerateKeyPair()
 	if err != nil {
 		panic(err)
 	}

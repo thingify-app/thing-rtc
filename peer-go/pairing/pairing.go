@@ -40,12 +40,12 @@ func (p *Pairing) InitiatePairing() (*PendingPairingResult, error) {
 }
 
 func (p *Pairing) InitiatePairingWithMetadata(metadata map[string]string) (*PendingPairingResult, error) {
-	localKeyPair, err := p.keyOperations.generateKeyPair()
+	localKeyPair, err := p.keyOperations.GenerateKeyPair()
 	if err != nil {
 		return nil, fmt.Errorf("generating keypair failed: %w", err)
 	}
 
-	publicKeyJwk := localKeyPair.PublicKey.exportJwk()
+	publicKeyJwk := localKeyPair.PublicKey.ExportJwk()
 	pendingPairing, err := p.pairingServer.createPairingRequest(publicKeyJwk, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("creating pairing request failed: %w", err)
@@ -59,7 +59,7 @@ func (p *Pairing) InitiatePairingWithMetadata(metadata map[string]string) (*Pend
 				return nil, fmt.Errorf("completing pending pairing failed: %w", err)
 			}
 
-			remotePublicKey, err := p.keyOperations.importJwkPublicKey(completedPairing.initiatorPublicKey)
+			remotePublicKey, err := p.keyOperations.ImportJwkPublicKey(completedPairing.initiatorPublicKey)
 			if err != nil {
 				return nil, fmt.Errorf("importing public key failed: %w", err)
 			}
@@ -93,18 +93,18 @@ func (p *Pairing) RespondToPairing(shortcode string) (*PairingResult, error) {
 }
 
 func (p *Pairing) RespondToPairingWithMetadata(shortcode string, metadata map[string]string) (*PairingResult, error) {
-	localKeyPair, err := p.keyOperations.generateKeyPair()
+	localKeyPair, err := p.keyOperations.GenerateKeyPair()
 	if err != nil {
 		return nil, fmt.Errorf("generating keypair failed: %w", err)
 	}
 
-	publicKeyJwk := localKeyPair.PublicKey.exportJwk()
+	publicKeyJwk := localKeyPair.PublicKey.ExportJwk()
 	pairDetails, err := p.pairingServer.respondToPairingRequest(shortcode, publicKeyJwk, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("responding to pairing request failed: %w", err)
 	}
 
-	remotePublicKey, err := p.keyOperations.importJwkPublicKey(pairDetails.responderPublicKey)
+	remotePublicKey, err := p.keyOperations.ImportJwkPublicKey(pairDetails.responderPublicKey)
 	if err != nil {
 		return nil, fmt.Errorf("importing public key failed: %w", err)
 	}

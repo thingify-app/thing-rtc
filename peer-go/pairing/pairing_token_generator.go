@@ -23,7 +23,7 @@ func (p *PairingTokenGenerator) GenerateNonce() string {
 }
 
 func (p *PairingTokenGenerator) SignMessage(message string) (string, error) {
-	signatureBytes, err := p.pairingData.localKeyPair.PrivateKey.signMessage(message)
+	signatureBytes, err := p.pairingData.localKeyPair.PrivateKey.SignMessage(message)
 	if err != nil {
 		return "", err
 	}
@@ -37,5 +37,5 @@ func (p *PairingTokenGenerator) VerifyMessage(base64Signature string, message st
 		return false
 	}
 
-	return p.pairingData.remotePublicKey.verifyMessage(signatureBytes, message)
+	return p.pairingData.remotePublicKey.VerifyMessage(signatureBytes, message)
 }

@@ -2,6 +2,7 @@ package pairing
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"testing"
 )
@@ -10,7 +11,7 @@ var keyOperations KeyOperations = NewEcdsaKeyOperationsWithRand(onesReader)
 
 func TestPublicKeyRoundTrip(t *testing.T) {
 	// Example JWK values taken from RFC 7517.
-	key, err := keyOperations.importJwkPublicKey(`
+	key, err := keyOperations.ImportJwkPublicKey(`
 	{
 		"kty": "EC",
 		"crv": "P-256",
@@ -23,7 +24,7 @@ func TestPublicKeyRoundTrip(t *testing.T) {
 		t.Error(err)
 	}
 
-	exportedKey := key.exportJwk()
+	exportedKey := key.ExportJwk()
 	var parsedKey map[string]interface{}
 	err = json.Unmarshal([]byte(exportedKey), &parsedKey)
 	if err != nil {
@@ -44,8 +45,23 @@ func TestPublicKeyRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSpkiPublicKeyRoundTrip(t *testing.T) {
+	spki := "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEQcqwkgbIa9GR/GGHcxmHmI7BIGiEr7S9nX61AdwE4IXEs3fyA0HRNQ8qA4BqKwr8+XhXqFgzQ+qw3GebiEcEqQ=="
+	spkiBytes, err := base64.StdEncoding.DecodeString(spki)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	publicKey, err := keyOperations.ImportSpkiPublicKey(spkiBytes)
+	exported := publicKey.ExportSpki()
+
+	if !bytes.Equal(exported, spkiBytes) {
+		t.Fatal("Exported key does not equal imported")
+	}
+}
+
 func TestPublicKeyImportExtraValues(t *testing.T) {
-	_, err := keyOperations.importJwkPublicKey(`
+	_, err := keyOperations.ImportJwkPublicKey(`
 	{
 		"kty": "EC",
 		"crv": "P-256",
@@ -63,14 +79,14 @@ func TestPublicKeyImportExtraValues(t *testing.T) {
 }
 
 func TestPublicKeyImportInvalidJson(t *testing.T) {
-	_, err := keyOperations.importJwkPublicKey(`blah`)
+	_, err := keyOperations.ImportJwkPublicKey(`blah`)
 	if err == nil {
 		t.Error("Failed to raise error on invalid JSON.")
 	}
 }
 
 func TestPublicKeyImportInvalidAlgorithm(t *testing.T) {
-	_, err := keyOperations.importJwkPublicKey(`
+	_, err := keyOperations.ImportJwkPublicKey(`
 	{
 		"kty": "RSA",
 		"crv": "P-256",
@@ -84,7 +100,7 @@ func TestPublicKeyImportInvalidAlgorithm(t *testing.T) {
 }
 
 func TestPublicKeyImportInvalidCurve(t *testing.T) {
-	_, err := keyOperations.importJwkPublicKey(`
+	_, err := keyOperations.ImportJwkPublicKey(`
 	{
 		"kty": "EC",
 		"crv": "P-384",
@@ -98,7 +114,7 @@ func TestPublicKeyImportInvalidCurve(t *testing.T) {
 }
 
 func TestPublicKeyImportInvalidParameters(t *testing.T) {
-	_, err := keyOperations.importJwkPublicKey(`
+	_, err := keyOperations.ImportJwkPublicKey(`
 	{
 		"kty": "EC",
 		"crv": "P-256",
@@ -111,13 +127,20 @@ func TestPublicKeyImportInvalidParameters(t *testing.T) {
 	}
 }
 
+func TestSpkiPublicKeyImportInvalid(t *testing.T) {
+	_, err := keyOperations.ImportSpkiPublicKey([]byte{1, 2, 3})
+	if err == nil {
+		t.Error("Failed to raise error on invalid SPKI key.")
+	}
+}
+
 func TestGenerateExportPublicKey(t *testing.T) {
-	keyPair, err := keyOperations.generateKeyPair()
+	keyPair, err := keyOperations.GenerateKeyPair()
 	if err != nil {
 		t.Error(err)
 	}
 
-	exportedKey := keyPair.PublicKey.exportJwk()
+	exportedKey := keyPair.PublicKey.ExportJwk()
 	var parsedKey map[string]interface{}
 	err = json.Unmarshal([]byte(exportedKey), &parsedKey)
 	if err != nil {
@@ -140,7 +163,7 @@ func TestGenerateExportPublicKey(t *testing.T) {
 
 func TestPrivateKeyRoundTrip(t *testing.T) {
 	// Example JWK values taken from RFC 7517.
-	key, err := keyOperations.importJwkPrivateKey(`
+	key, err := keyOperations.ImportJwkPrivateKey(`
 	{
 		"kty": "EC",
 		"crv": "P-256",
@@ -154,7 +177,7 @@ func TestPrivateKeyRoundTrip(t *testing.T) {
 		t.Error(err)
 	}
 
-	exportedKey := key.exportJwk()
+	exportedKey := key.ExportJwk()
 	var parsedKey map[string]interface{}
 	err = json.Unmarshal([]byte(exportedKey), &parsedKey)
 	if err != nil {
@@ -179,12 +202,12 @@ func TestPrivateKeyRoundTrip(t *testing.T) {
 }
 
 func TestGenerateExportPrivateKey(t *testing.T) {
-	keyPair, err := keyOperations.generateKeyPair()
+	keyPair, err := keyOperations.GenerateKeyPair()
 	if err != nil {
 		t.Error(err)
 	}
 
-	exportedKey := keyPair.PrivateKey.exportJwk()
+	exportedKey := keyPair.PrivateKey.ExportJwk()
 	var parsedKey map[string]interface{}
 	err = json.Unmarshal([]byte(exportedKey), &parsedKey)
 	if err != nil {
@@ -209,34 +232,84 @@ func TestGenerateExportPrivateKey(t *testing.T) {
 }
 
 func TestGenerateFullRoundTrip(t *testing.T) {
-	keyPair, err := keyOperations.generateKeyPair()
+	keyPair, err := keyOperations.GenerateKeyPair()
 	if err != nil {
 		t.Error(err)
 	}
 
 	// Export then import the public key.
-	exportedPublicKey := keyPair.PublicKey.exportJwk()
-	importedPublicKey, err := keyOperations.importJwkPublicKey(exportedPublicKey)
+	exportedPublicKey := keyPair.PublicKey.ExportJwk()
+	importedPublicKey, err := keyOperations.ImportJwkPublicKey(exportedPublicKey)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// Export then import the private key.
-	exportedPrivateKey := keyPair.PrivateKey.exportJwk()
-	importedPrivateKey, err := keyOperations.importJwkPrivateKey(exportedPrivateKey)
+	exportedPrivateKey := keyPair.PrivateKey.ExportJwk()
+	importedPrivateKey, err := keyOperations.ImportJwkPrivateKey(exportedPrivateKey)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// Sign a message and then verify with the imported public key.
-	signature, err := importedPrivateKey.signMessage("hello")
+	signature, err := importedPrivateKey.SignMessage("hello")
 	if err != nil {
 		t.Error(err)
 	}
 
-	verified := importedPublicKey.verifyMessage(signature, "hello")
+	verified := importedPublicKey.VerifyMessage(signature, "hello")
 	if !verified {
 		t.Errorf("Failed to verify own signature: %v", signature)
+	}
+}
+
+func TestSpkiGenerateFullRoundTrip(t *testing.T) {
+	keyPair, err := keyOperations.GenerateKeyPair()
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Export then import the public key.
+	exportedPublicKey := keyPair.PublicKey.ExportSpki()
+	importedPublicKey, err := keyOperations.ImportSpkiPublicKey(exportedPublicKey)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Export then import the private key.
+	exportedPrivateKey := keyPair.PrivateKey.ExportJwk()
+	importedPrivateKey, err := keyOperations.ImportJwkPrivateKey(exportedPrivateKey)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Sign a message and then verify with the imported public key.
+	signature, err := importedPrivateKey.SignMessage("hello")
+	if err != nil {
+		t.Error(err)
+	}
+
+	verified := importedPublicKey.VerifyMessage(signature, "hello")
+	if !verified {
+		t.Errorf("Failed to verify own signature: %v", signature)
+	}
+}
+
+func TestRoundTripFailure(t *testing.T) {
+	keyPair, err := keyOperations.GenerateKeyPair()
+	if err != nil {
+		t.Error(err)
+	}
+
+	signature, err := keyPair.PrivateKey.SignMessage("hello")
+	if err != nil {
+		t.Error(err)
+	}
+
+	verified := keyPair.PublicKey.VerifyMessage(signature, "blah")
+
+	if verified {
+		t.Errorf("Verified incorrect message: %v", signature)
 	}
 }
 
@@ -252,13 +325,13 @@ func TestSignatureEncodingPadded(t *testing.T) {
 	constRand := constReader{31}
 	keyOperations := NewEcdsaKeyOperationsWithRand(constRand)
 
-	keyPair, err := keyOperations.generateKeyPair()
+	keyPair, err := keyOperations.GenerateKeyPair()
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	signature, err := keyPair.PrivateKey.signMessage("hello")
+	signature, err := keyPair.PrivateKey.SignMessage("hello")
 	if err != nil {
 		t.Error(err)
 		return
@@ -273,7 +346,7 @@ func TestSignatureEncodingPadded(t *testing.T) {
 		t.Errorf("Signature '%v' does not match expected padded signature '%v'", signature, expectedSignature)
 	}
 
-	verified := keyPair.PublicKey.verifyMessage(signature, "hello")
+	verified := keyPair.PublicKey.VerifyMessage(signature, "hello")
 	if !verified {
 		t.Errorf("Failed to verify own signature: %v", signature)
 	}
@@ -286,7 +359,7 @@ func TestVerifyUnpaddedSignature(t *testing.T) {
 	message := "iNWPwVjsWF"
 	keyOperations := NewEcdsaKeyOperationsWithRand(constRand)
 
-	keyPair, err := keyOperations.generateKeyPair()
+	keyPair, err := keyOperations.GenerateKeyPair()
 	if err != nil {
 		t.Error(err)
 		return
@@ -295,7 +368,7 @@ func TestVerifyUnpaddedSignature(t *testing.T) {
 	sBytes := []byte{138, 235, 92, 132, 36, 80, 130, 27, 230, 90, 109, 204, 167, 170, 234, 35, 85, 235, 244, 17, 75, 190, 124, 29, 101, 192, 72, 126, 210, 224, 187}
 	unpaddedSignature := append(rBytes, sBytes...)
 
-	verified := keyPair.PublicKey.verifyMessage(unpaddedSignature, message)
+	verified := keyPair.PublicKey.VerifyMessage(unpaddedSignature, message)
 	if verified {
 		t.Errorf("Incorrectly verified unpadded signature!")
 	}

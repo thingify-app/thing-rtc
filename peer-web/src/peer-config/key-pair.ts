@@ -41,11 +41,11 @@ export class LocalKeyPair {
 
     private static async createFromKeyPair(keyPair: CryptoKeyPair): Promise<LocalKeyPair> {
         const digest = await publicKeyDigest(keyPair.publicKey);
-        const raw = await exportPublicKey(keyPair.publicKey);
-        return new LocalKeyPair(keyPair, digest, raw);
+        const spki = await exportPublicKey(keyPair.publicKey);
+        return new LocalKeyPair(keyPair, digest, spki);
     }
 
-    private constructor(private keyPair: CryptoKeyPair, readonly publicKeyDigest: string, readonly publicKeyRaw: string) {}
+    private constructor(private keyPair: CryptoKeyPair, readonly publicKeyDigest: string, readonly publicKeySpki: string) {}
 
     async sign(message: ArrayBuffer): Promise<ArrayBuffer> {
         return await subtle.sign({
@@ -67,16 +67,16 @@ export class LocalKeyPair {
  */
 export class RemoteKey {
     /**
-     * Create a RemoteKey representation of the provided raw, base64-encoded
+     * Create a RemoteKey representation of the provided SPKI, base64-encoded
      * public key.
      */
-    static async createRemoteKey(raw: string): Promise<RemoteKey> {
-        const publicKey = await importPublicKey(raw);
+    static async createRemoteKey(spki: string): Promise<RemoteKey> {
+        const publicKey = await importPublicKey(spki);
         const digest = await publicKeyDigest(publicKey);
-        return new RemoteKey(publicKey, digest, raw);
+        return new RemoteKey(publicKey, digest, spki);
     }
 
-    private constructor(private publicKey: CryptoKey, readonly publicKeyDigest: string, readonly publicKeyRaw: string) {}
+    private constructor(private publicKey: CryptoKey, readonly publicKeyDigest: string, readonly publicKeySpki: string) {}
 
     async verify(signature: ArrayBuffer, message: ArrayBuffer): Promise<boolean> {
         return await subtle.verify({
@@ -86,7 +86,7 @@ export class RemoteKey {
     }
 }
 
-export namespace WebCrypto {
+export namespace KeyPair {
     /**
      * Creates the PeerConfig representing a connection between the local client
      * and a provided remote peer.
@@ -124,25 +124,25 @@ async function generateKeyPair(): Promise<CryptoKeyPair> {
 }
 
 /**
- * Imports a base64-encoded raw public key into a web CryptoKey object.
+ * Imports a base64-encoded SPKI public key into a web CryptoKey object.
  */
-async function importPublicKey(raw: string): Promise<CryptoKey> {
+async function importPublicKey(spki: string): Promise<CryptoKey> {
     const algorithm = {
         name: 'ECDSA',
         namedCurve: 'P-256'
     };
-    return await subtle.importKey('raw', decode(raw), algorithm, true, ['verify']);
+    return await subtle.importKey('spki', decode(spki), algorithm, true, ['verify']);
 }
 
 /**
- * Exports a raw public key from a web CryptoKey object.
+ * Exports a SPKI public key from a web CryptoKey object.
  */
 async function exportPublicKey(key: CryptoKey): Promise<string> {
-    return encode(await subtle.exportKey('raw', key));
+    return encode(await subtle.exportKey('spki', key));
 }
 
 async function publicKeyDigest(key: CryptoKey): Promise<string> {
-    const spki = await subtle.exportKey('raw', key);
+    const spki = await subtle.exportKey('spki', key);
     const hash = await subtle.digest('SHA-256', spki);
     return encode(hash);
 }

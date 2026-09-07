@@ -6,7 +6,7 @@ import (
 
 func createPairingTokenGenerator() (p PairingTokenGenerator, err error) {
 	keyOperations := NewEcdsaKeyOperationsWithRand(onesReader)
-	keyPair, err := keyOperations.generateKeyPair()
+	keyPair, err := keyOperations.GenerateKeyPair()
 	if err != nil {
 		return
 	}
