@@ -17,6 +17,18 @@ func CreateLocalKeyPairWithKeyOperations(keyOperations pairing.KeyOperations) (p
 	return keyOperations.GenerateKeyPair()
 }
 
+func LoadLocalKeyPair(jwk string) (*pairing.KeyPair, error) {
+	privateKey, err := ecdsaKeyOperations.ImportJwkPrivateKey(jwk)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pairing.KeyPair{
+		PublicKey:  privateKey.PublicKey(),
+		PrivateKey: privateKey,
+	}, nil
+}
+
 func CreateRemoteKey(spki string) (pairing.PublicKey, error) {
 	return CreateRemoteKeyWithKeyOperations(ecdsaKeyOperations, spki)
 }

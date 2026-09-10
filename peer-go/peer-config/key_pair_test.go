@@ -1,6 +1,8 @@
 package peerconfig
 
 import (
+	"encoding/json"
+	"maps"
 	"testing"
 
 	"github.com/thingify-app/thing-rtc/peer-go/pairing"
@@ -63,5 +65,59 @@ func TestKeyPairPairingIdSorting(t *testing.T) {
 
 	if pairingId := p.PairingId; pairingId != "LmvG0IL2q/VVJa8e5qV0kl+Pfxqo09Npf35xTLkzQdY=:WgenI8eVaDCuLmvg73GzmRFi9epC0tVLhpzyFnNNeNM=" {
 		t.Errorf("Incorrect pairingId: %v", pairingId)
+	}
+}
+
+func TestLoadLocalKeyPair(t *testing.T) {
+	// Example JWK values taken from RFC 7517.
+	jwk := `
+	{
+		"kty": "EC",
+		"crv": "P-256",
+		"x": "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
+		"y": "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM",
+		"d": "870MB6gfuTJ4HtUnUvYMyJpr5eUZNP4Bk43bVdj3eAE"
+	}
+	`
+
+	keyPair, err := LoadLocalKeyPair(jwk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	privateJwk := keyPair.PrivateKey.ExportJwk()
+	publicJwk := keyPair.PublicKey.ExportJwk()
+
+	var parsedPrivateKey map[string]interface{}
+	err = json.Unmarshal([]byte(privateJwk), &parsedPrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedPrivateKey := map[string]interface{}{
+		"crv": "P-256",
+		"kty": "EC",
+		"x":   "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
+		"y":   "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM",
+		"d":   "870MB6gfuTJ4HtUnUvYMyJpr5eUZNP4Bk43bVdj3eAE",
+	}
+	if !maps.Equal(expectedPrivateKey, parsedPrivateKey) {
+		t.Errorf("Private key does not match expected: %v\n", privateJwk)
+	}
+
+	var parsedPublicKey map[string]interface{}
+	err = json.Unmarshal([]byte(publicJwk), &parsedPublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedPublicKey := map[string]interface{}{
+		"crv": "P-256",
+		"kty": "EC",
+		"x":   "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
+		"y":   "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM",
+	}
+	if !maps.Equal(expectedPublicKey, parsedPublicKey) {
+		t.Errorf("Public key does not match expected: %v\n", publicJwk)
 	}
 }

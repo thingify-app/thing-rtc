@@ -34,6 +34,7 @@ type PublicKey interface {
 type PrivateKey interface {
 	SignMessage(message string) ([]byte, error)
 	ExportJwk() string
+	PublicKey() PublicKey
 }
 
 type KeyPair struct {
@@ -166,32 +167,25 @@ func (e ecdsaKeyOperations) ImportJwkPrivateKey(data string) (PrivateKey, error)
 		},
 		D: d,
 	}
-	key := ecdsaPrivateKey{
-		privateKey,
-		e.rand,
-	}
 
-	return key, nil
+	return newEcdsaPrivateKey(privateKey, e.rand)
 }
 
 // Generates an ECDSA key pair using the P-256 curve.
 func (e ecdsaKeyOperations) GenerateKeyPair() (keyPair KeyPair, err error) {
-	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), e.rand)
+	generatedKey, err := ecdsa.GenerateKey(elliptic.P256(), e.rand)
 	if err != nil {
 		return
 	}
 
-	publicKey, err := newEcdsaPublicKey(&privateKey.PublicKey)
+	p, err := newEcdsaPrivateKey(generatedKey, e.rand)
 	if err != nil {
 		return
 	}
 
 	keyPair = KeyPair{
-		PublicKey: publicKey,
-		PrivateKey: ecdsaPrivateKey{
-			privateKey,
-			e.rand,
-		},
+		PublicKey:  p.PublicKey(),
+		PrivateKey: p,
 	}
 	return
 }
@@ -221,9 +215,26 @@ type ecdsaPublicKey struct {
 	fingerprint string
 }
 
+func newEcdsaPrivateKey(privateKey *ecdsa.PrivateKey, rand io.Reader) (PrivateKey, error) {
+	publicKey, err := newEcdsaPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ecdsaPrivateKey{
+		privateKey: privateKey,
+		publicKey:  publicKey,
+		rand:       rand,
+	}, nil
+}
+
 type ecdsaPrivateKey struct {
 	privateKey *ecdsa.PrivateKey
 	rand       io.Reader
+
+	// publicKey is derived from privateKey, but precomputed and stored in the
+	// struct to catch all errors at creation time.
+	publicKey PublicKey
 }
 
 func (e ecdsaPublicKey) VerifyMessage(signature []byte, message string) bool {
@@ -300,6 +311,10 @@ func (e ecdsaPrivateKey) ExportJwk() string {
 
 	jwk, _ := json.Marshal(members)
 	return string(jwk)
+}
+
+func (e ecdsaPrivateKey) PublicKey() PublicKey {
+	return e.publicKey
 }
 
 func stringToBigInt(str string) (val *big.Int, err error) {

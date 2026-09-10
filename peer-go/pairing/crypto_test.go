@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"maps"
 	"testing"
 )
 
@@ -371,5 +372,39 @@ func TestVerifyUnpaddedSignature(t *testing.T) {
 	verified := keyPair.PublicKey.VerifyMessage(unpaddedSignature, message)
 	if verified {
 		t.Errorf("Incorrectly verified unpadded signature!")
+	}
+}
+
+func TestPublicKeyFromPrivateKey(t *testing.T) {
+	// Example JWK values taken from RFC 7517.
+	key, err := keyOperations.ImportJwkPrivateKey(`
+	{
+		"kty": "EC",
+		"crv": "P-256",
+		"x": "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
+		"y": "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM",
+		"d": "870MB6gfuTJ4HtUnUvYMyJpr5eUZNP4Bk43bVdj3eAE"
+	}
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	publicJwk := key.PublicKey().ExportJwk()
+
+	var parsedKey map[string]interface{}
+	err = json.Unmarshal([]byte(publicJwk), &parsedKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedPublicKey := map[string]interface{}{
+		"crv": "P-256",
+		"kty": "EC",
+		"x":   "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
+		"y":   "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM",
+	}
+	if !maps.Equal(expectedPublicKey, parsedKey) {
+		t.Errorf("Public key does not match expected: %v\n", publicJwk)
 	}
 }
